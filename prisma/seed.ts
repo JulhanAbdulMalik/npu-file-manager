@@ -4,34 +4,44 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🧹 Membersihkan seluruh data database...");
+  console.log("🌱 Menjalankan pemeriksaan seed database...");
 
-  // 1. Hapus semua data dokumen, sub-kategori, kategori, dan user lama
-  await prisma.dokumen.deleteMany({});
-  await prisma.subKategori.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.kategori.deleteMany({});
+  // 1. Periksa apakah sudah ada akun SUPER_ADMIN di database
+  const existingSuperAdmin = await prisma.user.findFirst({
+    where: { role: Role.SUPER_ADMIN },
+  });
 
-  console.log("✅ Seluruh data dokumen, sub-kategori, dan kategori telah dikosongkan.");
+  if (existingSuperAdmin) {
+    console.log(
+      `ℹ️  Akun Super Admin sudah terdaftar di sistem (${existingSuperAdmin.email}).`
+    );
+    console.log(
+      "🔒 Data aman: Tidak ada data dokumen, kategori, atau user yang dihapus/ditimpa."
+    );
+    return;
+  }
 
-  // 2. Buat satu-satunya akun default Superadmin untuk deployment
-  const hashedPassword = await bcrypt.hash("julhanadmin123", 10);
+  // 2. Jika belum ada Super Admin (misalnya database baru di server), buat dari variabel lingkungan (.env)
+  const adminName = process.env.INITIAL_ADMIN_NAME || "Super Administrator";
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || "admin@nusaputra.ac.id";
+  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || "AdminNpu2026!";
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
   const superAdmin = await prisma.user.create({
     data: {
-      name: "Julhan Abdul Malik",
-      email: "julhan@nusaputra.ac.id",
+      name: adminName,
+      email: adminEmail,
       password: hashedPassword,
       role: Role.SUPER_ADMIN,
     },
   });
 
-  console.log("✅ Akun Superadmin berhasil dibuat:");
+  console.log("✅ Inisialisasi akun Super Admin awal berhasil dibuat:");
   console.log(`   - Nama     : ${superAdmin.name}`);
-  console.log(`   - Username : ${superAdmin.email}`);
+  console.log(`   - Email    : ${superAdmin.email}`);
   console.log(`   - Role     : ${superAdmin.role}`);
-  console.log("   - Password : julhanadmin123");
-  console.log("🎉 Database bersih dan siap untuk deployment!");
+  console.log("💡 Password diambil dengan aman dari environment variable (INITIAL_ADMIN_PASSWORD).");
 }
 
 main()
