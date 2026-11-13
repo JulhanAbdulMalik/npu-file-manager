@@ -557,7 +557,7 @@ function LoginForm() {
 
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 mb-5 text-xs text-slate-700">
               <span className="font-semibold block text-slate-900 mb-0.5">Kontak Administrator:</span>
-              <span>superadmin@nusaputra.ac.id</span>
+              <span>julhan@nusaputra.ac.id</span>
             </div>
 
             <button

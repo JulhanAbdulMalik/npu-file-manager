@@ -127,7 +127,7 @@ export default function Sidebar() {
           {!isCollapsed && (
             <div className="min-w-0 animate-fade-in">
               <h2 className="text-sm font-bold text-slate-900 tracking-tight leading-none">
-                NPU <span className="text-[#a80063]">FILE MGR</span>
+                NPU <span className="text-[#a80063]">FILE</span>
               </h2>
               <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
                 Nusa Putra University

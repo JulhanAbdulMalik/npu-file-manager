@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <!-- Rounded Rect in Nusa Putra Brand Color (#a80063) -->
+  <rect width="32" height="32" rx="7" fill="#a80063"/>
+  <!-- Folder Open Icon matching NPU File Manager Sidebar -->
+  <g transform="translate(4, 4)">
+    <path d="M4 19.5v-13a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m2 10.5 1.8 9.5a2 2 0 0 0 2 1.5h14.4a2 2 0 0 0 2-1.5l1.8-9.5H2Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
+
