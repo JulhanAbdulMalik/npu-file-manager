@@ -63,7 +63,7 @@ export default function PublicBanner({
       {/* Left: Clean Heading & Subtitle (Identik CDU Portal Greeting) */}
       <div>
         <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-none">
-          Portal Manajemen Dokumen 👋
+          Evaluasi Lapangan Fakultas Kedokteran dan Ilmu Kesehatan
         </h1>
         <p className="text-xs text-slate-500 font-normal mt-1.5">
           Universitas Nusa Putra &bull; Fokus tampilan:{" "}

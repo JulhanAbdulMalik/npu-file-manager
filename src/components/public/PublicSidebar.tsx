@@ -172,7 +172,7 @@ export default function PublicSidebar({
               />
 
               {!isCollapsed && (
-                <span className="flex-1 text-left truncate">Semua</span>
+                <span className="flex-1 text-left truncate">Dokumen Aplikasi Siaga</span>
               )}
             </button>
           </div>
