@@ -1,8 +1,8 @@
 "use client";
 // src/components/public/PublicPortalView.tsx
-// Document Grid ala UPI dengan 5 Kolom per Baris, Collapsible per Kategori, & Icon Dokumen Saja
+// Document Grid dengan Penomoran Bertingkat (1., 1.1., 1.1.1.) & Dukungan Dokumen Langsung di Kategori
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Layers,
   FolderOpen,
@@ -12,10 +12,13 @@ import {
   AlertCircle,
   Search,
   ChevronRight,
-  ChevronsDown,
-  ChevronsUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  stripLeadingNumber,
+  buildSubKategoriTree,
+  SubKategoriTreeNode,
+} from "@/lib/hierarchy";
 
 interface DokumenItem {
   id: string;
@@ -25,14 +28,8 @@ interface DokumenItem {
   driveFileId?: string | null;
   status: "LENGKAP" | "DALAM_PROSES" | "BELUM";
   urutan: number;
-}
-
-interface SubKategoriItem {
-  id: string;
-  nama: string;
-  deskripsi?: string | null;
-  urutan: number;
-  dokumen: DokumenItem[];
+  kategoriId?: string;
+  subKategoriId?: string | null;
 }
 
 interface KategoriItem {
@@ -42,7 +39,9 @@ interface KategoriItem {
   warna?: string | null;
   ikon?: string | null;
   urutan: number;
-  subKategori: SubKategoriItem[];
+  dokumen?: DokumenItem[];
+  subKategori: any[];
+  subKategoriTree?: SubKategoriTreeNode[];
 }
 
 interface PublicPortalViewProps {
@@ -72,11 +71,11 @@ export default function PublicPortalView({
   expandedKats: propExpandedKats,
   onToggleExpandKat: propOnToggleExpandKat,
 }: PublicPortalViewProps) {
-  // Accordion state per Kategori di Halaman Utama (Default terbuka semua)
+  // Accordion state per Kategori di Halaman Utama (Default tertutup semua diawal agar rapi)
   const [localExpandedKats, setLocalExpandedKats] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     kategoris.forEach((k) => {
-      initial[k.id] = true;
+      initial[k.id] = false;
     });
     return initial;
   });
@@ -90,7 +89,7 @@ export default function PublicPortalView({
     } else {
       setLocalExpandedKats((prev) => ({
         ...prev,
-        [id]: !(prev[id] ?? true),
+        [id]: !(prev[id] ?? false),
       }));
     }
   }
@@ -100,61 +99,94 @@ export default function PublicPortalView({
     const q = searchQuery.toLowerCase().trim();
 
     return kategoris
+      .map((k, katIdx) => {
+        // Gunakan nomor urut asli kategori dari daftar keseluruhan
+        const origIdx = kategoris.findIndex((orig) => orig.id === k.id);
+        const katIndex = origIdx !== -1 ? origIdx + 1 : (k as any).katIndex || katIdx + 1;
+        const subTree =
+          k.subKategoriTree ||
+          buildSubKategoriTree(k.subKategori as any, katIndex);
+
+        // Filter dokumen langsung di kategori
+        const directDocs = (k.dokumen || []).filter((doc) => {
+          if (selectedSubId !== "ALL" && selectedSubId !== "DIRECT") {
+            return false;
+          }
+          if (selectedStatus !== "ALL" && doc.status !== selectedStatus) {
+            return false;
+          }
+          if (q) {
+            const matchName = doc.nama.toLowerCase().includes(q);
+            const matchDesc = doc.deskripsi?.toLowerCase().includes(q) || false;
+            const matchKat = k.nama.toLowerCase().includes(q);
+            if (!matchName && !matchDesc && !matchKat) return false;
+          }
+          return true;
+        });
+
+        // Filter dokumen di sub-kategori (rekursif)
+        function filterTree(nodes: SubKategoriTreeNode[]): SubKategoriTreeNode[] {
+          return nodes
+            .map((node) => {
+              const isSelectedSub =
+                selectedSubId === "ALL" || selectedSubId === node.id;
+
+              const filteredDocs = isSelectedSub
+                ? (node.dokumen || []).filter((doc) => {
+                    if (selectedStatus !== "ALL" && doc.status !== selectedStatus) {
+                      return false;
+                    }
+                    if (q) {
+                      const matchName = doc.nama.toLowerCase().includes(q);
+                      const matchDesc = doc.deskripsi?.toLowerCase().includes(q) || false;
+                      const matchSub = node.nama.toLowerCase().includes(q);
+                      const matchKat = k.nama.toLowerCase().includes(q);
+                      if (!matchName && !matchDesc && !matchSub && !matchKat) return false;
+                    }
+                    return true;
+                  })
+                : [];
+
+              const filteredChildren = filterTree(node.children || []);
+
+              return {
+                ...node,
+                dokumen: filteredDocs,
+                children: filteredChildren,
+              };
+            })
+            .filter((node) => node.dokumen.length > 0 || (node.children && node.children.length > 0));
+        }
+
+        const filteredSubTree = filterTree(subTree);
+
+        return {
+          ...k,
+          katIndex,
+          cleanName: stripLeadingNumber(k.nama),
+          directDocs,
+          filteredSubTree,
+        };
+      })
       .filter((k) => {
         if (selectedKategoriId !== "ALL" && k.id !== selectedKategoriId) {
           return false;
         }
-        return true;
-      })
-      .map((k) => {
-        const filteredSubs = k.subKategori
-          .filter((sub) => {
-            if (selectedSubId !== "ALL" && sub.id !== selectedSubId) {
-              return false;
-            }
-            return true;
-          })
-          .map((sub) => {
-            const filteredDocs = sub.dokumen.filter((doc) => {
-              // Filter Status
-              if (selectedStatus !== "ALL" && doc.status !== selectedStatus) {
-                return false;
-              }
-              // Filter Search query
-              if (q) {
-                const matchName = doc.nama.toLowerCase().includes(q);
-                const matchDesc = doc.deskripsi?.toLowerCase().includes(q) || false;
-                const matchSub = sub.nama.toLowerCase().includes(q);
-                const matchKat = k.nama.toLowerCase().includes(q);
-                if (!matchName && !matchDesc && !matchSub && !matchKat) {
-                  return false;
-                }
-              }
-              return true;
-            });
-
-            return {
-              ...sub,
-              dokumen: filteredDocs,
-            };
-          })
-          .filter((sub) => sub.dokumen.length > 0);
-
-        return {
-          ...k,
-          subKategori: filteredSubs,
-        };
-      })
-      .filter((k) => k.subKategori.length > 0);
+        return k.directDocs.length > 0 || k.filteredSubTree.length > 0;
+      });
   }, [kategoris, selectedKategoriId, selectedSubId, selectedStatus, searchQuery]);
 
   // Total visible documents
   const totalVisibleDocs = useMemo(() => {
-    return filteredKategoris.reduce((acc, k) => {
-      return (
-        acc +
-        k.subKategori.reduce((sAcc, sub) => sAcc + sub.dokumen.length, 0)
+    function countNodeDocs(nodes: SubKategoriTreeNode[]): number {
+      return nodes.reduce(
+        (acc, n) => acc + (n.dokumen?.length || 0) + countNodeDocs(n.children || []),
+        0
       );
+    }
+
+    return filteredKategoris.reduce((acc, k) => {
+      return acc + k.directDocs.length + countNodeDocs(k.filteredSubTree);
     }, 0);
   }, [filteredKategoris]);
 
@@ -182,6 +214,125 @@ export default function PublicPortalView({
           icon: AlertCircle,
         };
     }
+  }
+
+  // Komponen untuk merender sekumpulan kartu dokumen dalam grid 5 kolom
+  function renderDocumentCards(docs: DokumenItem[]) {
+    return (
+      <div
+        className={`grid gap-2 sm:gap-2.5 transition-all duration-300 ${
+          isSplitView
+            ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3"
+            : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        }`}
+      >
+        {docs.map((doc, docIdx) => {
+          const statusStyle = getStatusStyle(doc.status);
+          const isCurrentActive = activeDocumentId === doc.id;
+
+          return (
+            <div
+              key={doc.id}
+              onClick={() => onSelectDocument(doc)}
+              className={cn(
+                "group relative bg-white rounded-xl border p-2.5 sm:p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none",
+                isCurrentActive
+                  ? "border-[#a80063] ring-2 ring-[#a80063]/15 shadow-md bg-[#fdf2f8]/30"
+                  : "border-slate-200/80 hover:border-[#a80063]/50 hover:shadow-md hover:translate-y-[-1px]"
+              )}
+            >
+              {/* Header Card: Nomor & Status Badge */}
+              <div className="flex items-center justify-between gap-1 mb-2">
+                <span className="w-5 h-5 rounded-md bg-slate-100 group-hover:bg-[#fdf2f8] group-hover:text-[#a80063] text-slate-500 text-[10.5px] font-bold flex items-center justify-center transition-colors">
+                  {docIdx + 1}
+                </span>
+
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-semibold border",
+                    statusStyle.bg
+                  )}
+                >
+                  <span
+                    className={cn("w-1.5 h-1.5 rounded-full", statusStyle.dot)}
+                  />
+                  {statusStyle.label}
+                </span>
+              </div>
+
+              {/* Title & Deskripsi */}
+              <div className="mb-2 min-w-0">
+                <h4
+                  className="text-xs font-bold text-slate-800 group-hover:text-[#a80063] line-clamp-2 leading-snug transition-colors"
+                  title={doc.nama}
+                >
+                  {doc.nama}
+                </h4>
+                {doc.deskripsi && (
+                  <p
+                    className="text-[10px] text-slate-400 line-clamp-1 mt-1 leading-normal"
+                    title={doc.deskripsi}
+                  >
+                    {doc.deskripsi}
+                  </p>
+                )}
+              </div>
+
+              {/* Footer Card: Ikon Berkas & Status Preview */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                <span className="flex items-center gap-1 font-medium text-slate-400 group-hover:text-[#a80063] transition-colors">
+                  <FileText size={12} />
+                  <span>Preview</span>
+                </span>
+                <span className="text-[9.5px] font-medium text-slate-400 group-hover:text-slate-600">
+                  Google Drive
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Render rekursif SubKategori Nodes
+  function renderSubCategoryNode(node: SubKategoriTreeNode) {
+    const hasDocs = node.dokumen && node.dokumen.length > 0;
+    const hasChildren = node.children && node.children.length > 0;
+
+    if (!hasDocs && !hasChildren) return null;
+
+    return (
+      <div key={node.id} className="space-y-2.5">
+        {/* Sub-kategori heading with hierarchical numbering 1.1., 1.1.1. */}
+        <div className="flex items-center gap-1.5 border-b border-slate-100/90 pb-1.5">
+          <span className="text-xs font-bold text-[#a80063]">
+            {node.code}
+          </span>
+          <h3 className="text-xs font-bold text-slate-800">
+            {node.cleanName}
+          </h3>
+          {node.deskripsi && (
+            <span className="text-[10.5px] text-slate-400 hidden sm:inline">
+              -{node.deskripsi}
+            </span>
+          )}
+          <span className="ml-auto text-[10.5px] font-semibold text-slate-400">
+            {node.dokumen.length} Dokumen
+          </span>
+        </div>
+
+        {/* Grid Document Cards */}
+        {hasDocs && renderDocumentCards(node.dokumen)}
+
+        {/* Nested Children (Anak & Anak Lagi dari Sub Kategori) */}
+        {hasChildren && (
+          <div className="mt-3 pl-3 sm:pl-4 border-l-2 border-slate-200/80 space-y-4">
+            {node.children.map((childNode) => renderSubCategoryNode(childNode))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -231,18 +382,21 @@ export default function PublicPortalView({
       <div className="space-y-4">
         {filteredKategoris.map((kategori) => {
           const kategoriColor = kategori.warna || "#a80063";
-          const isExpanded = expandedKats[kategori.id] ?? true;
-          const catDocCount = kategori.subKategori.reduce(
-            (acc, s) => acc + s.dokumen.length,
-            0
-          );
+          const isExpanded = expandedKats[kategori.id] ?? false;
+          const katNumber = `${kategori.katIndex}.`;
+          const catDocCount =
+            kategori.directDocs.length +
+            kategori.filteredSubTree.reduce(
+              (acc, s) => acc + s.totalDocCount,
+              0
+            );
 
           return (
             <div
               key={kategori.id}
               className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden transition-all"
             >
-              {/* Category Header with Toggle Click (Sama Persis Halaman /kategori) */}
+              {/* Category Header with Toggle Click (Penomoran 1., 2., 3.) */}
               <div
                 onClick={() => toggleExpandKat(kategori.id)}
                 className="px-4 sm:px-5 py-3 border-b border-slate-200/60 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none transition-colors hover:bg-slate-50/60"
@@ -273,8 +427,9 @@ export default function PublicPortalView({
                     <Layers size={14} />
                   </div>
                   <div>
-                    <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
-                      {kategori.nama}
+                    <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                      <span className="text-[#a80063] font-extrabold">{katNumber}</span>
+                      <span>{kategori.cleanName}</span>
                     </h2>
                     {kategori.deskripsi && (
                       <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
@@ -303,110 +458,29 @@ export default function PublicPortalView({
                 }`}
               >
                 <div className="accordion-inner">
-                  <div className="p-3 sm:p-4 md:p-5 space-y-4">
-                    {kategori.subKategori.map((sub, subIdx) => (
-                      <div key={sub.id} className="space-y-2.5">
-                        {/* Sub-kategori heading with clean numbering 1, 2, 3 without bullet dot */}
-                        <div className="flex items-center gap-1.5 border-b border-slate-100/90 pb-1.5">
+                  <div className="p-3 sm:p-4 md:p-5 space-y-5">
+                    {/* 1. Bagian Dokumen Langsung di Kategori (Jika Ada) */}
+                    {kategori.directDocs.length > 0 && (
+                      <div className="space-y-2.5 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                        <div className="flex items-center gap-1.5 border-b border-slate-200/80 pb-1.5">
                           <span className="text-xs font-bold text-[#a80063]">
-                            {subIdx + 1}.
+                            {katNumber}
                           </span>
                           <h3 className="text-xs font-bold text-slate-800">
-                            {sub.nama.replace(/^\d+[\.\s\-]+\s*/, "")}
+                            Dokumen Utama Kategori
                           </h3>
-                          {sub.deskripsi && (
-                            <span className="text-[10.5px] text-slate-400 hidden sm:inline">
-                              -{sub.deskripsi}
-                            </span>
-                          )}
                           <span className="ml-auto text-[10.5px] font-semibold text-slate-400">
-                            {sub.dokumen.length} Dokumen
+                            {kategori.directDocs.length} Dokumen
                           </span>
                         </div>
-
-                        {/* Grid Document Cards: 5 Kolom per Baris */}
-                        <div
-                          className={`grid gap-2 sm:gap-2.5 transition-all duration-300 ${
-                            isSplitView
-                              ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3"
-                              : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-                          }`}
-                        >
-                          {sub.dokumen.map((doc, docIdx) => {
-                            const statusStyle = getStatusStyle(doc.status);
-                            const isCurrentActive = activeDocumentId === doc.id;
-
-                            return (
-                              <div
-                                key={doc.id}
-                                onClick={() =>
-                                  onSelectDocument({
-                                    ...doc,
-                                    subKategori: {
-                                      nama: sub.nama,
-                                      kategori: {
-                                        nama: kategori.nama,
-                                        warna: kategoriColor,
-                                      },
-                                    },
-                                  })
-                                }
-                                className={`group p-2.5 sm:p-3 rounded-xl border bg-white cursor-pointer flex flex-col justify-between relative transition-all duration-150 ${
-                                  isCurrentActive
-                                    ? "border-[#a80063] bg-[#fdf2f8]/40 ring-1 ring-[#a80063]/30 shadow-xs"
-                                    : "border-slate-200/70 shadow-[0_1px_3px_rgba(15,23,42,0.02)] hover:border-[#fbcfe8] hover:bg-[#fdf2f8]/20 hover:shadow-[0_4px_14px_-2px_rgba(168,0,99,0.05)]"
-                                }`}
-                              >
-                                {/* Top row: Number & Status Badge */}
-                                <div className="flex items-center justify-between gap-1 mb-1.5">
-                                  <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 font-bold text-[10px] flex items-center justify-center shrink-0">
-                                    {doc.urutan || docIdx + 1}
-                                  </span>
-
-                                  <span
-                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${statusStyle.bg}`}
-                                  >
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`}
-                                    />
-                                    <span>{statusStyle.label}</span>
-                                  </span>
-                                </div>
-
-                                {/* Document Title */}
-                                <h4
-                                  className={`text-xs font-semibold leading-snug line-clamp-2 mb-2 transition-colors ${
-                                    isCurrentActive
-                                      ? "text-[#a80063]"
-                                      : "text-slate-800 group-hover:text-[#a80063]"
-                                  }`}
-                                  title={doc.nama}
-                                >
-                                  {doc.nama}
-                                </h4>
-
-                                {/* Footer hint: Icon Dokumen Saja (Tanpa tulisan 'Pratinjau' & Tanpa Icon Mata) */}
-                                <div className="pt-1.5 border-t border-slate-100/90 flex items-center justify-between text-[10px] text-slate-400 gap-1">
-                                  <span className="truncate flex-1 text-[9.5px] pr-1">
-                                    {doc.deskripsi || "Berkas Dokumen"}
-                                  </span>
-                                  <span
-                                    title="Buka Dokumen"
-                                    className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-all ${
-                                      isCurrentActive
-                                        ? "bg-[#a80063] text-white shadow-xs"
-                                        : "bg-slate-100 text-slate-500 group-hover:bg-[#fdf2f8] group-hover:text-[#a80063] group-hover:border group-hover:border-[#fbcfe8]"
-                                    }`}
-                                  >
-                                    <FileText size={12} strokeWidth={2.2} />
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {renderDocumentCards(kategori.directDocs)}
                       </div>
-                    ))}
+                    )}
+
+                    {/* 2. Bagian Sub-Kategori & Anak-Anaknya */}
+                    {kategori.filteredSubTree.map((subNode) =>
+                      renderSubCategoryNode(subNode)
+                    )}
                   </div>
                 </div>
               </div>

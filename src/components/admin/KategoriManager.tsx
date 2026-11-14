@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Layers,
   Plus,
@@ -24,6 +24,12 @@ import {
 } from "@/actions/kategori";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import {
+  stripLeadingNumber,
+  buildSubKategoriTree,
+  flattenSubKategoriTree,
+  SubKategoriTreeNode,
+} from "@/lib/hierarchy";
 
 const COLOR_PRESETS = [
   "#a80063", // Nusa Putra Magenta / Ruby
@@ -40,6 +46,8 @@ interface SubKategori {
   nama: string;
   deskripsi?: string | null;
   urutan: number;
+  kategoriId: string;
+  parentId?: string | null;
   _count?: { dokumen: number };
 }
 
@@ -50,6 +58,7 @@ interface Kategori {
   warna?: string | null;
   ikon?: string | null;
   urutan: number;
+  dokumen?: any[];
   subKategori: SubKategori[];
 }
 
@@ -61,7 +70,6 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
   const router = useRouter();
   const [kategoris, setKategoris] = useState<Kategori[]>(initialKategoris);
   const [expandedKats, setExpandedKats] = useState<Record<string, boolean>>(() => {
-    // Default open all
     const state: Record<string, boolean> = {};
     initialKategoris.forEach((k) => (state[k.id] = true));
     return state;
@@ -78,6 +86,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
     isOpen: boolean;
     mode: "create" | "edit";
     kategoriId?: string;
+    parentId?: string | null;
+    parentName?: string | null;
     data?: Partial<SubKategori>;
   }>({ isOpen: false, mode: "create" });
 
@@ -151,6 +161,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
     const formData = new FormData(form);
     const nama = (formData.get("nama") as string).trim();
     const deskripsi = (formData.get("deskripsi") as string).trim();
+    const parentIdVal = (formData.get("parentId") as string)?.trim() || null;
 
     if (!nama) {
       toast.error("Nama sub-kategori wajib diisi");
@@ -164,6 +175,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
           nama,
           deskripsi,
           kategoriId: subModal.kategoriId,
+          parentId: parentIdVal,
         });
         if (res.success) {
           toast.success("Sub-kategori berhasil ditambahkan!");
@@ -176,6 +188,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         const res = await updateSubKategori(subModal.data.id, {
           nama,
           deskripsi,
+          parentId: parentIdVal,
         });
         if (res.success) {
           toast.success("Sub-kategori berhasil diperbarui!");
@@ -199,7 +212,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
       if (deleteConfirm.type === "kategori") {
         const res = await deleteKategori(deleteConfirm.id);
         if (res.success) {
-          toast.success("Kategori berhasil dihapus!");
+          toast.success("Kategori berhasil dihapus");
           setDeleteConfirm({ isOpen: false, type: "kategori", id: "", nama: "" });
           router.refresh();
         } else {
@@ -208,33 +221,159 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
       } else {
         const res = await deleteSubKategori(deleteConfirm.id);
         if (res.success) {
-          toast.success("Sub-kategori berhasil dihapus!");
-          setDeleteConfirm({ isOpen: false, type: "kategori", id: "", nama: "" });
+          toast.success("Sub-kategori berhasil dihapus");
+          setDeleteConfirm({ isOpen: false, type: "sub", id: "", nama: "" });
           router.refresh();
         } else {
           toast.error(res.error || "Gagal menghapus sub-kategori");
         }
       }
     } catch {
-      toast.error("Terjadi kesalahan sistem saat menghapus");
+      toast.error("Terjadi kesalahan saat menghapus");
     } finally {
       setLoading(false);
     }
   }
 
+  // Pilihan Parent untuk modal sub-kategori berdasarkan kategori yang aktif
+  const availableParentOptions = useMemo(() => {
+    if (!subModal.kategoriId) return [];
+    const foundIdx = kategoris.findIndex((k) => k.id === subModal.kategoriId);
+    if (foundIdx === -1) return [];
+    const kat = kategoris[foundIdx];
+    const tree = buildSubKategoriTree(kat.subKategori as any, foundIdx + 1);
+    const flat = flattenSubKategoriTree(tree);
+    // Jika sedang edit, jangan tampilkan diri sendiri sebagai opsi parent
+    return flat.filter((opt) => opt.id !== subModal.data?.id);
+  }, [subModal.kategoriId, subModal.data?.id, kategoris]);
+
+  // Render Sub-Kategori Table Row (Rekursif untuk Tree View)
+  function renderSubCategoryRows(
+    nodes: SubKategoriTreeNode[],
+    kat: Kategori,
+    katColor: string
+  ): React.ReactNode {
+    return nodes.map((node) => {
+      const indentClass =
+        node.level === 1
+          ? ""
+          : node.level === 2
+          ? "pl-6 sm:pl-8 border-l-2 border-slate-200"
+          : "pl-10 sm:pl-14 border-l-2 border-slate-300";
+
+      return (
+        <React.Fragment key={node.id}>
+          <tr className="hover:bg-slate-50/80 transition-colors group">
+            {/* Sub-Kategori Name & Code */}
+            <td className={`py-2.5 pr-3 ${indentClass}`}>
+              <div className="flex items-center gap-2">
+                <FolderOpen
+                  size={14}
+                  style={{ color: katColor }}
+                  className="shrink-0"
+                />
+                <span className="font-bold text-xs text-[#a80063] tabular-nums shrink-0">
+                  {node.code}
+                </span>
+                <span className="font-semibold text-xs text-slate-800">
+                  {node.cleanName}
+                </span>
+              </div>
+            </td>
+
+            {/* Description */}
+            <td className="py-2.5 pr-3 text-slate-400 text-[11px]">
+              {node.deskripsi || "—"}
+            </td>
+
+            {/* Jumlah Dokumen */}
+            <td className="py-2.5 px-2 text-center">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                <FileText size={10} className="text-slate-400" />
+                <span>{node.totalDocCount} Dokumen</span>
+              </span>
+            </td>
+
+            {/* Aksi */}
+            <td className="py-2.5 pl-2 pr-1 text-right">
+              <div className="flex items-center justify-end gap-1">
+                {/* Tambah Anak Sub-Kategori */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSubModal({
+                      isOpen: true,
+                      mode: "create",
+                      kategoriId: kat.id,
+                      parentId: node.id,
+                      parentName: node.fullLabel,
+                    })
+                  }
+                  className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[10.5px] font-semibold text-[#a80063] bg-[#fdf2f8] hover:bg-[#fce7f3] border border-[#fbcfe8] transition-colors cursor-pointer"
+                  title={`Tambah Anak Sub di bawah "${node.cleanName}"`}
+                >
+                  <FolderPlus size={11} />
+                  <span className="hidden sm:inline">+ Anak</span>
+                </button>
+
+                {/* Edit */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSubModal({
+                      isOpen: true,
+                      mode: "edit",
+                      kategoriId: kat.id,
+                      parentId: node.parentId,
+                      data: node,
+                    })
+                  }
+                  className="w-6 h-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Edit Sub-Kategori"
+                >
+                  <Edit2 size={11} />
+                </button>
+
+                {/* Hapus */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDeleteConfirm({
+                      isOpen: true,
+                      type: "sub",
+                      id: node.id,
+                      nama: `${node.code} ${node.cleanName}`,
+                    })
+                  }
+                  className="w-6 h-6 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Hapus Sub-Kategori"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            </td>
+          </tr>
+
+          {/* Render Recursive Children (Anak & Anak Lagi) */}
+          {node.children &&
+            node.children.length > 0 &&
+            renderSubCategoryRows(node.children, kat, katColor)}
+        </React.Fragment>
+      );
+    });
+  }
+
   return (
-    <div className="space-y-4">
-      {/* ── 1. TOP GREETING & ACTION HEADER ───────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+      {/* ── HEADER CARD ──────────────────────────────────────────────────── */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-none">
-            Kelola Kategori & Sub-Kategori
+          <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <span>Kelola Kategori &amp; Sub-Kategori</span>
           </h1>
-          <p className="text-xs text-slate-500 font-normal mt-1">
-            Atur hierarki struktur kategori & sub-kategori dokumen{" "}
-            <span className="font-semibold text-[#a80063]">
-              Universitas Nusa Putra
-            </span>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Atur hierarki penomoran (1., 1.1., 1.1.1.), struktur kategori, sub-kategori bertingkat, dan dokumen{" "}
+            <span className="font-semibold text-[#a80063]">Universitas Nusa Putra</span>
           </p>
         </div>
 
@@ -243,30 +382,65 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
             setKategoriModal({
               isOpen: true,
               mode: "create",
-              data: { warna: "#a80063" },
             })
           }
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#a80063] hover:bg-[#8c0052] text-white text-[11px] font-semibold rounded-lg shadow-xs shadow-[#a80063]/20 transition-all cursor-pointer self-start sm:self-auto shrink-0"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#a80063] hover:bg-[#8c0052] active:scale-95 text-white text-xs font-semibold shadow-xs shadow-[#a80063]/20 transition-all cursor-pointer self-start sm:self-auto"
         >
-          <Plus size={13} />
+          <Plus size={15} />
           <span>Tambah Kategori Baru</span>
         </button>
       </div>
 
-      {/* ── 2. KATEGORI LIST & HIERARCHY ───────────────────────────────── */}
-      <div className="space-y-3.5">
-        {initialKategoris.map((kat) => {
-          const isExpanded = expandedKats[kat.id] ?? true;
+      {/* ── EMPTY STATE ─────────────────────────────────────────────────── */}
+      {kategoris.length === 0 && (
+        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200/70">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-[#a80063] flex items-center justify-center mx-auto mb-3">
+            <Layers size={22} />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900 mb-1">
+            Belum Ada Kategori Dokumen
+          </h3>
+          <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
+            Mulai dengan menambahkan kategori utama untuk pengelompokan berkas.
+          </p>
+          <button
+            onClick={() =>
+              setKategoriModal({
+                isOpen: true,
+                mode: "create",
+              })
+            }
+            className="px-4 py-2 bg-[#a80063] text-white text-xs font-semibold rounded-xl hover:bg-[#8c0052] transition-colors cursor-pointer"
+          >
+            Tambah Kategori Pertama
+          </button>
+        </div>
+      )}
+
+      {/* ── LIST KATEGORI CARDS DENGAN PENOMORAN 1., 2., DST ───────────────── */}
+      <div className="space-y-4">
+        {kategoris.map((kat, katIdx) => {
           const katColor = kat.warna || "#a80063";
-          const totalDocs = kat.subKategori.reduce(
-            (sum, s) => sum + (s._count?.dokumen || 0),
-            0
-          );
+          const isExpanded = expandedKats[kat.id];
+          const katNumber = `${katIdx + 1}.`;
+          const cleanKatName = stripLeadingNumber(kat.nama);
+
+          // SubKategori Tree
+          const subTree = buildSubKategoriTree(kat.subKategori as any, katIdx + 1);
+
+          // Hitung total dokumen
+          const directDocsCount = kat.dokumen?.length || 0;
+          const totalDocs =
+            directDocsCount +
+            kat.subKategori.reduce(
+              (acc, s) => acc + (s._count?.dokumen ?? 0),
+              0
+            );
 
           return (
             <div
               key={kat.id}
-              className="duralux-card bg-white overflow-hidden"
+              className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden transition-all"
             >
               {/* Category Header Row */}
               <div
@@ -294,8 +468,11 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                   </div>
 
                   <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight leading-snug">
-                      {kat.nama}
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight leading-snug flex items-center gap-1.5">
+                      <span className="text-[#a80063] font-extrabold tabular-nums">
+                        {katNumber}
+                      </span>
+                      <span>{cleanKatName}</span>
                     </h3>
                     {kat.deskripsi && (
                       <p className="text-[10.5px] text-slate-400 line-clamp-1 font-normal">
@@ -318,19 +495,21 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                     {kat.subKategori.length} Sub &bull; {totalDocs} Dokumen
                   </span>
 
+                  {/* Tambah Sub-Kategori Tingkat Utama */}
                   <button
                     onClick={() =>
                       setSubModal({
                         isOpen: true,
                         mode: "create",
                         kategoriId: kat.id,
+                        parentId: null,
                       })
                     }
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#fdf2f8] hover:bg-[#fce7f3] text-[#a80063] border border-[#fbcfe8] text-[11px] font-semibold transition-colors cursor-pointer"
-                    title="Tambah Sub-Kategori"
+                    title="Tambah Sub-Kategori Utama"
                   >
                     <FolderPlus size={12} />
-                    <span>Tambah Sub</span>
+                    <span>+ Sub</span>
                   </button>
 
                   <button
@@ -353,7 +532,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                         isOpen: true,
                         type: "kategori",
                         id: kat.id,
-                        nama: kat.nama,
+                        nama: `${katNumber} ${cleanKatName}`,
                       })
                     }
                     className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
@@ -374,89 +553,38 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
               >
                 <div className="accordion-inner">
                   <div className="p-3 sm:p-4">
+                    {/* Info Dokumen Langsung di Kategori (Jika Ada) */}
+                    {directDocsCount > 0 && (
+                      <div className="mb-3 px-3 py-2 bg-slate-50/80 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 text-slate-700">
+                          <FileText size={14} className="text-[#a80063]" />
+                          <span className="font-semibold text-slate-800">
+                            Dokumen Langsung di Kategori:
+                          </span>
+                          <span className="text-slate-500">
+                            {directDocsCount} berkas tersimpan langsung tanpa sub-kategori
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {kat.subKategori.length === 0 ? (
                       <div className="py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
-                        Belum ada sub-kategori. Klik tombol &ldquo;Tambah Sub&rdquo; untuk membuat sub-kategori pertama.
+                        Belum ada sub-kategori. Klik tombol &ldquo;+ Sub&rdquo; untuk membuat sub-kategori pertama (1.1.).
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
                             <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                              <th className="pb-2.5 font-bold w-1/3">Sub-Kategori</th>
+                              <th className="pb-2.5 font-bold w-2/5">Sub-Kategori &amp; Hierarki</th>
                               <th className="pb-2.5 font-bold">Deskripsi</th>
                               <th className="pb-2.5 text-center font-bold w-32">Jumlah Dokumen</th>
-                              <th className="pb-2.5 text-right font-bold w-20">Aksi</th>
+                              <th className="pb-2.5 text-right font-bold w-28">Aksi</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {kat.subKategori.map((sub, sIdx) => (
-                              <tr
-                                key={sub.id}
-                                className="hover:bg-slate-50/70 transition-colors group"
-                              >
-                                {/* Sub-Kategori Name */}
-                                <td className="py-2.5 pr-3">
-                                  <div className="flex items-center gap-2">
-                                    <FolderOpen
-                                      size={14}
-                                      style={{ color: katColor }}
-                                      className="shrink-0"
-                                    />
-                                    <span className="font-semibold text-xs text-slate-800">
-                                      {sIdx + 1}. {sub.nama}
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* Description */}
-                                <td className="py-2.5 pr-3 text-slate-400 text-[11px]">
-                                  {sub.deskripsi || "—"}
-                                </td>
-
-                                {/* Jumlah Dokumen */}
-                                <td className="py-2.5 px-2 text-center">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
-                                    <FileText size={10} className="text-slate-400" />
-                                    <span>{sub._count?.dokumen ?? 0} berkas</span>
-                                  </span>
-                                </td>
-
-                                {/* Actions */}
-                                <td className="py-2.5 pl-2 text-right">
-                                  <div className="inline-flex items-center gap-1">
-                                    <button
-                                      onClick={() =>
-                                        setSubModal({
-                                          isOpen: true,
-                                          mode: "edit",
-                                          kategoriId: kat.id,
-                                          data: sub,
-                                        })
-                                      }
-                                      className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
-                                      title="Edit Sub-Kategori"
-                                    >
-                                      <Edit2 size={12} />
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        setDeleteConfirm({
-                                          isOpen: true,
-                                          type: "sub",
-                                          id: sub.id,
-                                          nama: sub.nama,
-                                        })
-                                      }
-                                      className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
-                                      title="Hapus Sub-Kategori"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                            {renderSubCategoryRows(subTree, kat, katColor)}
                           </tbody>
                         </table>
                       </div>
@@ -469,12 +597,14 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         })}
       </div>
 
-      {/* ── MODAL KATEGORI (CREATE / EDIT) ─────────────────────────────── */}
+      {/* ── MODAL KATEGORI (CREATE / EDIT) ──────────────────────────────── */}
       {kategoriModal.isOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 transition-opacity">
           <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative animate-modal-pop">
             <button
-              onClick={() => setKategoriModal({ isOpen: false, mode: "create" })}
+              onClick={() =>
+                setKategoriModal({ isOpen: false, mode: "create" })
+              }
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X size={16} />
@@ -486,7 +616,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                 : "Edit Kategori"}
             </h3>
             <p className="text-[11px] text-slate-500 mb-4">
-              Kategori mewakili kelompok atau kegiatan utama dokumen
+              Kategori menjadi payung utama penomoran tingkat 1 (1., 2., dst)
             </p>
 
             <form onSubmit={handleSaveKategori} className="space-y-3.5">
@@ -498,8 +628,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                   name="nama"
                   type="text"
                   required
-                  defaultValue={kategoriModal.data?.nama || ""}
-                  placeholder="Contoh: DOKUMEN KEGIATAN & ARSIP"
+                  defaultValue={stripLeadingNumber(kategoriModal.data?.nama || "")}
+                  placeholder="Contoh: DOKUMEN PERSYARATAN & LEGALITAS"
                   className="w-full px-3 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -512,7 +642,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                   name="deskripsi"
                   rows={2}
                   defaultValue={kategoriModal.data?.deskripsi || ""}
-                  placeholder="Keterangan standar dokumen ini..."
+                  placeholder="Keterangan kategori dokumen ini..."
                   className="w-full px-3 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -571,7 +701,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         </div>
       )}
 
-      {/* ── MODAL SUB-KATEGORI (CREATE / EDIT) ──────────────────────────── */}
+      {/* ── MODAL SUB-KATEGORI (CREATE / EDIT DENGAN DUKUNGAN ANAK SUB) ─── */}
       {subModal.isOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 transition-opacity">
           <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative animate-modal-pop">
@@ -584,11 +714,15 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
 
             <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-0.5">
               {subModal.mode === "create"
-                ? "Tambah Sub-Kategori Baru"
+                ? subModal.parentId
+                  ? "Tambah Anak Sub-Kategori"
+                  : "Tambah Sub-Kategori Baru"
                 : "Edit Sub-Kategori"}
             </h3>
             <p className="text-[11px] text-slate-500 mb-4">
-              Sub-kategori mengelompokkan butir dokumen spesifik
+              {subModal.parentName
+                ? `Ditambahkan di bawah: ${subModal.parentName}`
+                : "Sub-kategori mendukung penomoran otomatis bertingkat (1.1., 1.1.1., dst)"}
             </p>
 
             <form onSubmit={handleSaveSub} className="space-y-3.5">
@@ -600,15 +734,37 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                   name="nama"
                   type="text"
                   required
-                  defaultValue={subModal.data?.nama || ""}
+                  defaultValue={stripLeadingNumber(subModal.data?.nama || "")}
                   placeholder="Contoh: Kurikulum & Capaian Pembelajaran"
                   className="w-full px-3 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
 
+              {/* Induk Sub-Kategori (Pilihan Opsional: Jadikan Anak atau Tingkat Utama) */}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  Deskripsi / Keterangan
+                  Induk Sub-Kategori (Pilihan Opsional)
+                </label>
+                <select
+                  name="parentId"
+                  defaultValue={subModal.parentId || ""}
+                  className="w-full px-3 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer font-sans"
+                >
+                  <option value="">(Tingkat Utama — Langsung di Bawah Kategori)</option>
+                  {availableParentOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Kosongkan jika ini adalah sub-kategori utama (1.1.), atau pilih induk jika ingin dijadikan anak sub-kategori (1.1.1.).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Deskripsi / Keterangan Singkat
                 </label>
                 <textarea
                   name="deskripsi"
@@ -652,8 +808,9 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
             </h3>
             <p className="text-xs text-slate-500 mb-4">
               Apakah Anda yakin ingin menghapus &ldquo;{deleteConfirm.nama}&rdquo;?
-              {deleteConfirm.type === "kategori" &&
-                " Semua sub-kategori dan dokumen terkait juga akan terdampak."}
+              {deleteConfirm.type === "kategori"
+                ? " Semua sub-kategori, anak sub-kategori, dan dokumen terkait juga akan terhapus."
+                : " Anak sub-kategori dan dokumen di dalamnya juga akan terdampak."}
             </p>
             <div className="flex items-center justify-center gap-2">
               <button

@@ -3,31 +3,44 @@
 import { useState, useMemo } from "react";
 import {
   FileText,
-  Plus,
   Search,
+  Filter,
+  Plus,
   ExternalLink,
   Edit2,
   Trash2,
-  X,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Eye,
   Link as LinkIcon,
-  Check,
-  RotateCcw,
+  ChevronDown,
+  Layers,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  RotateCcw,
+  Check,
+  X,
 } from "lucide-react";
 import {
   createDokumen,
   updateDokumen,
   deleteDokumen,
+  updateStatusDokumen,
 } from "@/actions/dokumen";
-import { extractDriveFileId } from "@/lib/drive";
 import { StatusDok } from "@prisma/client";
+import { extractDriveFileId } from "@/lib/drive";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import StatusBadge from "./StatusBadge";
 import DocumentPreviewDrawer from "@/components/public/DocumentPreviewDrawer";
 import TablePagination from "@/components/common/TablePagination";
+import {
+  stripLeadingNumber,
+  buildSubKategoriTree,
+  flattenSubKategoriTree,
+  SubKategoriTreeNode,
+} from "@/lib/hierarchy";
 
 interface DokumenItem {
   id: string;
@@ -37,28 +50,31 @@ interface DokumenItem {
   driveFileId?: string | null;
   status: StatusDok;
   urutan: number;
-  subKategoriId: string;
+  kategoriId: string;
+  subKategoriId?: string | null;
+  kategori?: {
+    id: string;
+    nama: string;
+    warna?: string | null;
+    ikon?: string | null;
+  };
   subKategori?: {
     id: string;
     nama: string;
     kategoriId: string;
-    kategori?: {
+    parent?: {
       id: string;
       nama: string;
-      warna?: string | null;
-    };
-  };
+    } | null;
+  } | null;
 }
 
 interface KategoriItem {
   id: string;
   nama: string;
   warna?: string | null;
-  subKategori: {
-    id: string;
-    nama: string;
-    kategoriId: string;
-  }[];
+  urutan: number;
+  subKategori: any[];
 }
 
 interface DokumenManagerProps {
@@ -113,18 +129,44 @@ export default function DokumenManager({
     return extractDriveFileId(formLinkDrive);
   }, [formLinkDrive]);
 
-  // Sub-categories available based on selected filter Kategori
-  const availableFilterSubs = useMemo(() => {
+  // Map sub-kategori to hierarchical code & labels
+  const subKategoriMap = useMemo(() => {
+    const map = new Map<string, { code: string; cleanName: string; fullLabel: string }>();
+
+    kategoris.forEach((k, kIdx) => {
+      const tree = buildSubKategoriTree(k.subKategori as any, kIdx + 1);
+      const flat = flattenSubKategoriTree(tree);
+      flat.forEach((item) => {
+        const clean = stripLeadingNumber(item.label.replace(/^.*└─\s*/, ""));
+        map.set(item.id, {
+          code: item.code,
+          cleanName: clean,
+          fullLabel: item.label,
+        });
+      });
+    });
+
+    return map;
+  }, [kategoris]);
+
+  // Sub-categories available based on selected filter Kategori (Hierarchical)
+  const availableFilterSubsFlat = useMemo(() => {
     if (filterKategori === "ALL") return [];
-    const found = kategoris.find((k) => k.id === filterKategori);
-    return found?.subKategori || [];
+    const foundIdx = kategoris.findIndex((k) => k.id === filterKategori);
+    if (foundIdx === -1) return [];
+    const found = kategoris[foundIdx];
+    const tree = buildSubKategoriTree(found.subKategori as any, foundIdx + 1);
+    return flattenSubKategoriTree(tree);
   }, [filterKategori, kategoris]);
 
-  // Sub-categories available inside Modal based on formKategoriId
-  const availableFormSubs = useMemo(() => {
+  // Sub-categories available inside Modal based on formKategoriId (Hierarchical)
+  const availableFormSubsFlat = useMemo(() => {
     if (!formKategoriId) return [];
-    const found = kategoris.find((k) => k.id === formKategoriId);
-    return found?.subKategori || [];
+    const foundIdx = kategoris.findIndex((k) => k.id === formKategoriId);
+    if (foundIdx === -1) return [];
+    const found = kategoris[foundIdx];
+    const tree = buildSubKategoriTree(found.subKategori as any, foundIdx + 1);
+    return flattenSubKategoriTree(tree);
   }, [formKategoriId, kategoris]);
 
   // Status counts (Pipeline breakdown)
@@ -148,26 +190,34 @@ export default function DokumenManager({
 
     return dokumens.filter((doc) => {
       // Filter Kategori
-      if (
-        filterKategori !== "ALL" &&
-        doc.subKategori?.kategoriId !== filterKategori
-      ) {
-        return false;
+      if (filterKategori !== "ALL") {
+        const docKatId = doc.kategoriId || doc.subKategori?.kategoriId;
+        if (docKatId !== filterKategori) return false;
       }
+
       // Filter Sub-kategori
-      if (filterSub !== "ALL" && doc.subKategoriId !== filterSub) {
-        return false;
+      if (filterSub !== "ALL") {
+        if (filterSub === "DIRECT") {
+          if (doc.subKategoriId) return false;
+        } else if (doc.subKategoriId !== filterSub) {
+          return false;
+        }
       }
+
       // Filter Status
       if (filterStatus !== "ALL" && doc.status !== filterStatus) {
         return false;
       }
+
       // Filter Search
       if (q) {
         const matchName = doc.nama.toLowerCase().includes(q);
         const matchDesc = doc.deskripsi?.toLowerCase().includes(q) || false;
-        const matchSub = doc.subKategori?.nama.toLowerCase().includes(q) || false;
-        const matchKat = doc.subKategori?.kategori?.nama.toLowerCase().includes(q) || false;
+        const matchSub = doc.subKategori?.nama?.toLowerCase().includes(q) || false;
+        const matchKat =
+          doc.kategori?.nama?.toLowerCase().includes(q) ||
+          doc.subKategori?.parent?.nama?.toLowerCase().includes(q) ||
+          false;
         if (!matchName && !matchDesc && !matchSub && !matchKat) {
           return false;
         }
@@ -183,8 +233,8 @@ export default function DokumenManager({
       if (sortColumn === "NAMA") {
         cmp = a.nama.localeCompare(b.nama);
       } else if (sortColumn === "KATEGORI") {
-        const katA = a.subKategori?.kategori?.nama || "";
-        const katB = b.subKategori?.kategori?.nama || "";
+        const katA = a.kategori?.nama || "";
+        const katB = b.kategori?.nama || "";
         cmp = katA.localeCompare(katB);
       } else if (sortColumn === "STATUS") {
         cmp = a.status.localeCompare(b.status);
@@ -254,8 +304,7 @@ export default function DokumenManager({
     setEditingDoc(null);
     const defaultKat = kategoris[0]?.id || "";
     setFormKategoriId(defaultKat);
-    const defaultSubs = kategoris[0]?.subKategori || [];
-    setFormSubKategoriId(defaultSubs[0]?.id || "");
+    setFormSubKategoriId(""); // Default: simpan langsung di kategori
     setFormLinkDrive("");
     setModalOpen(true);
   }
@@ -263,9 +312,9 @@ export default function DokumenManager({
   function openEditModal(doc: DokumenItem) {
     setModalMode("edit");
     setEditingDoc(doc);
-    const katId = doc.subKategori?.kategoriId || kategoris[0]?.id || "";
+    const katId = doc.kategoriId || doc.subKategori?.kategoriId || kategoris[0]?.id || "";
     setFormKategoriId(katId);
-    setFormSubKategoriId(doc.subKategoriId);
+    setFormSubKategoriId(doc.subKategoriId || "");
     setFormLinkDrive(doc.linkDrive);
     setModalOpen(true);
   }
@@ -278,14 +327,14 @@ export default function DokumenManager({
     const deskripsi = (formData.get("deskripsi") as string).trim();
     const linkDrive = (formData.get("linkDrive") as string).trim();
     const status = formData.get("status") as StatusDok;
-    const subKategoriId = formSubKategoriId;
+    const subKategoriId = formSubKategoriId ? formSubKategoriId.trim() : null;
 
     if (!nama) {
       toast.error("Nama dokumen wajib diisi");
       return;
     }
-    if (!subKategoriId) {
-      toast.error("Sub-kategori wajib dipilih");
+    if (!formKategoriId) {
+      toast.error("Kategori wajib dipilih");
       return;
     }
     if (!linkDrive) {
@@ -300,6 +349,7 @@ export default function DokumenManager({
           nama,
           deskripsi: deskripsi || null,
           linkDrive,
+          kategoriId: formKategoriId,
           subKategoriId,
           status,
         });
@@ -316,6 +366,7 @@ export default function DokumenManager({
           nama,
           deskripsi: deskripsi || null,
           linkDrive,
+          kategoriId: formKategoriId,
           subKategoriId,
           status,
         });
@@ -349,383 +400,369 @@ export default function DokumenManager({
         toast.error(res.error || "Gagal menghapus dokumen");
       }
     } catch {
-      toast.error("Terjadi kesalahan sistem saat menghapus dokumen");
+      toast.error("Terjadi kesalahan saat menghapus dokumen");
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleStatusChange(docId: string, newStatus: StatusDok) {
+    try {
+      const res = await updateStatusDokumen(docId, newStatus);
+      if (res.success) {
+        setDokumens((prev) =>
+          prev.map((d) => (d.id === docId ? { ...d, status: newStatus } : d))
+        );
+        toast.success("Status dokumen diperbarui");
+      } else {
+        toast.error(res.error || "Gagal mengubah status");
+      }
+    } catch {
+      toast.error("Gagal mengubah status");
+    }
+  }
+
+  const isFilterActive =
+    search.trim() !== "" ||
+    filterKategori !== "ALL" ||
+    filterSub !== "ALL" ||
+    filterStatus !== "ALL";
+
+  function resetAllFilters() {
+    setSearch("");
+    setFilterKategori("ALL");
+    setFilterSub("ALL");
+    setFilterStatus("ALL");
+    setCurrentPage(1);
+  }
+
   return (
-    <div className="space-y-4">
-      {/* ── 1. TOP HEADER (Identik CDU Portal Page Header) ───────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+    <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto">
+      {/* ── 1. HEADER CARD (CDU Portal Standard) ─────────────────────────── */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-none">
-            Kelola Dokumen
+          <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <span>Kelola Dokumen</span>
           </h1>
-          <p className="text-xs text-slate-500 font-normal mt-1">
+          <p className="text-xs text-slate-500 mt-0.5">
             Daftar lengkap berkas, tautan Google Drive, dan status verifikasi{" "}
-            <span className="font-semibold text-[#a80063]">
-              Universitas Nusa Putra
-            </span>
+            <span className="font-semibold text-[#a80063]">Universitas Nusa Putra</span>
           </p>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#a80063] hover:bg-[#8c0052] text-white text-[11px] font-semibold rounded-lg shadow-xs shadow-[#a80063]/20 transition-all cursor-pointer self-start sm:self-auto shrink-0"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#a80063] hover:bg-[#8c0052] active:scale-95 text-white text-xs font-semibold shadow-xs shadow-[#a80063]/20 transition-all cursor-pointer self-start sm:self-auto"
         >
-          <Plus size={13} />
+          <Plus size={15} />
           <span>Tambah Dokumen Baru</span>
         </button>
       </div>
 
-      {/* ── 2. STANDARDIZED SINGLE-ROW FILTER TOOLBAR (CDU Portal Monitoring Style) ── */}
-      <div className="bg-white p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          {/* Left: Search Box & Segmented Status Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Search Input */}
-            <div className="relative w-full sm:w-48 lg:w-56">
-              <Search
-                size={13}
-                className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${
-                  search ? "text-[#a80063]" : "text-slate-400"
-                }`}
-              />
-              <input
-                type="text"
-                placeholder="Cari dokumen / berkas..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className={`w-full pl-7 pr-7 py-1 text-xs rounded-lg border outline-none transition-all ${
-                  search
-                    ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#a80063] font-medium"
-                    : "bg-slate-50 border-slate-200 text-slate-800 focus:border-[#fbcfe8]"
-                }`}
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
-                  title="Hapus pencarian"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            {/* Segmented Status Pipeline Tabs (Identik CDU Portal Monitoring Status Tabs) */}
-            <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200/70">
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterStatus("ALL");
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterStatus === "ALL"
-                    ? "bg-white text-slate-900 shadow-2xs border border-slate-200/60"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <span>Semua</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200/70 text-slate-700 font-bold">
-                  {totalCount}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterStatus(StatusDok.LENGKAP);
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterStatus === StatusDok.LENGKAP
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
-                    : "text-slate-600 hover:text-emerald-600 hover:bg-emerald-50/50"
-                }`}
-              >
-                <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span>Lengkap</span>
-                </span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-700 font-extrabold">
-                  {lengkapCount}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterStatus(StatusDok.DALAM_PROSES);
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterStatus === StatusDok.DALAM_PROSES
-                    ? "bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs font-extrabold"
-                    : "text-slate-600 hover:text-amber-700 hover:bg-amber-50/50"
-                }`}
-              >
-                <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  <span>Proses</span>
-                </span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold">
-                  {prosesCount}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterStatus(StatusDok.BELUM);
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterStatus === StatusDok.BELUM
-                    ? "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
-                    : "text-slate-600 hover:text-rose-600 hover:bg-rose-50/50"
-                }`}
-              >
-                <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                  <span>Belum</span>
-                </span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-100 text-rose-700 font-extrabold">
-                  {belumCount}
-                </span>
-              </button>
-            </div>
+      {/* ── 2. SINGLE-ROW FILTER TOOLBAR (CDU Portal Standard) ───────────── */}
+      <div className="bg-white p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
+          {/* Real-time Search Input */}
+          <div className="relative w-full sm:w-60 md:w-72">
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Cari dokumen / berkas..."
+              className="w-full pl-8 pr-16 py-1.5 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200/80 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all placeholder:text-slate-400"
+            />
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:inline-block text-[9.5px] font-medium text-slate-400 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded">
+              Ctrl+K
+            </kbd>
           </div>
 
-          {/* Right: Dropdowns & Reset Button */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Kategori Filter */}
-            <select
-              value={filterKategori}
-              onChange={(e) => {
-                setFilterKategori(e.target.value);
-                setFilterSub("ALL");
+          {/* Segmented Status Tabs */}
+          <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200/70 text-xs">
+            <button
+              onClick={() => {
+                setFilterStatus("ALL");
                 setCurrentPage(1);
               }}
-              className={`px-2 py-1 text-[11px] rounded-lg border outline-none cursor-pointer font-medium transition-all max-w-[160px] truncate ${
-                filterKategori !== "ALL"
-                  ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#a80063] font-semibold"
-                  : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                filterStatus === "ALL"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
               }`}
-              title="Filter Kategori"
             >
-              <option value="ALL">Semua Kategori</option>
-              {kategoris.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nama}
-                </option>
-              ))}
-            </select>
-
-            {/* Sub-Kategori Filter */}
-            <select
-              value={filterSub}
-              disabled={filterKategori === "ALL"}
-              onChange={(e) => {
-                setFilterSub(e.target.value);
+              Semua{" "}
+              <span className="text-[10px] font-bold text-slate-400 ml-1">
+                {totalCount}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                setFilterStatus(StatusDok.LENGKAP);
                 setCurrentPage(1);
               }}
-              className={`px-2 py-1 text-[11px] rounded-lg border outline-none cursor-pointer font-medium transition-all max-w-[160px] truncate disabled:opacity-40 ${
-                filterSub !== "ALL"
-                  ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#a80063] font-semibold"
-                  : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                filterStatus === StatusDok.LENGKAP
+                  ? "bg-white text-emerald-700 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
               }`}
-              title="Filter Sub-Kategori"
             >
-              <option value="ALL">Semua Sub-Kategori</option>
-              {availableFilterSubs.map((sub) => (
-                <option key={sub.id} value={sub.id}>
-                  {sub.nama}
-                </option>
-              ))}
-            </select>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>Lengkap</span>
+              <span className="text-[10px] font-bold text-emerald-600 ml-0.5">
+                {lengkapCount}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                setFilterStatus(StatusDok.DALAM_PROSES);
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                filterStatus === StatusDok.DALAM_PROSES
+                  ? "bg-white text-amber-700 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span>Proses</span>
+              <span className="text-[10px] font-bold text-amber-600 ml-0.5">
+                {prosesCount}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                setFilterStatus(StatusDok.BELUM);
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                filterStatus === StatusDok.BELUM
+                  ? "bg-white text-slate-700 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span>Belum</span>
+              <span className="text-[10px] font-bold text-slate-500 ml-0.5">
+                {belumCount}
+              </span>
+            </button>
+          </div>
+        </div>
 
-            {/* Reset Button */}
-            {(search ||
-              filterKategori !== "ALL" ||
-              filterSub !== "ALL" ||
-              filterStatus !== "ALL" ||
-              sortColumn !== "URUTAN" ||
-              sortDir !== "ASC") && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch("");
-                  setFilterKategori("ALL");
-                  setFilterSub("ALL");
-                  setFilterStatus("ALL");
-                  setSortColumn("URUTAN");
-                  setSortDir("ASC");
-                  setCurrentPage(1);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-[#a80063] bg-[#fdf2f8] border border-[#fbcfe8] hover:bg-[#fce7f3] transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-                title="Reset semua filter ke default"
-              >
-                <RotateCcw size={10} />
-                <span>Reset Filter</span>
-              </button>
+        {/* Right Filter Selects */}
+        <div className="flex items-center gap-2">
+          {/* Dropdown Filter Kategori (1., 2., dst) */}
+          <select
+            value={filterKategori}
+            onChange={(e) => {
+              setFilterKategori(e.target.value);
+              setFilterSub("ALL");
+              setCurrentPage(1);
+            }}
+            className="px-2.5 py-1.5 bg-slate-50 text-xs text-slate-700 rounded-lg border border-slate-200/80 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer font-medium"
+          >
+            <option value="ALL">Semua Kategori</option>
+            {kategoris.map((k, idx) => (
+              <option key={k.id} value={k.id}>
+                {idx + 1}. {stripLeadingNumber(k.nama)}
+              </option>
+            ))}
+          </select>
+
+          {/* Dropdown Filter Sub-Kategori (Hierarkis) */}
+          <select
+            value={filterSub}
+            onChange={(e) => {
+              setFilterSub(e.target.value);
+              setCurrentPage(1);
+            }}
+            disabled={filterKategori === "ALL"}
+            className="px-2.5 py-1.5 bg-slate-50 text-xs text-slate-700 rounded-lg border border-slate-200/80 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <option value="ALL">Semua Sub-Kategori</option>
+            {filterKategori !== "ALL" && (
+              <option value="DIRECT">(Dokumen Langsung di Kategori)</option>
             )}
-          </div>
+            {availableFilterSubsFlat.map((sub) => (
+              <option key={sub.id} value={sub.id}>
+                {sub.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Reset Filters Button */}
+          {isFilterActive && (
+            <button
+              onClick={resetAllFilters}
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200/70 transition-colors cursor-pointer"
+              title="Reset semua filter"
+            >
+              <RotateCcw size={13} />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── 3. STANDARDIZED DATA TABLE (CDU Portal Monitoring Standard) ── */}
-      <div className="duralux-card p-0 bg-white overflow-hidden shadow-xs relative">
+      {/* ── 3. DATA TABLE (CDU Portal Standard) ──────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[760px] table-auto">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b-2 border-slate-100 text-[10.5px] font-bold uppercase tracking-wider text-slate-700 bg-slate-50">
-                <th className="py-2.5 px-3 text-center w-12">No</th>
-                {renderSortHeader("Nama Dokumen", "NAMA", "left", "min-w-[260px]")}
-                {renderSortHeader("Kategori & Sub", "KATEGORI", "left", "min-w-[200px]")}
-                <th className="py-2.5 px-2.5 text-center font-bold text-slate-700 w-16">
-                  Drive
-                </th>
-                {renderSortHeader("Status", "STATUS", "center", "w-36")}
-                <th className="py-2.5 px-3 text-center font-bold text-slate-700 w-24">
-                  Aksi
-                </th>
+              <tr className="bg-slate-50/90 border-b border-slate-200/70 text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none">
+                {renderSortHeader("NO", "URUTAN", "center", "w-12")}
+                {renderSortHeader("NAMA DOKUMEN", "NAMA", "left")}
+                {renderSortHeader("KATEGORI & SUB", "KATEGORI", "left", "w-72")}
+                <th className="py-2.5 px-3 text-center font-bold w-16">DRIVE</th>
+                {renderSortHeader("STATUS", "STATUS", "center", "w-36")}
+                <th className="py-2.5 px-3 text-center font-bold w-24">AKSI</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100/80 text-xs">
+            <tbody className="divide-y divide-slate-100">
               {paginatedDokumens.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                        <FileText size={18} />
-                      </div>
-                      <p className="font-bold text-slate-700 text-xs">
-                        Tidak Ada Dokumen Ditemukan
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        Tidak ada berkas yang sesuai dengan kriteria pencarian dan filter saat ini.
-                      </p>
-                    </div>
+                    <FileText size={24} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-xs font-semibold text-slate-600">
+                      Tidak ada dokumen yang sesuai dengan filter
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Coba sesuaikan kata kunci pencarian atau status filter
+                    </p>
                   </td>
                 </tr>
               ) : (
                 paginatedDokumens.map((doc, idx) => {
-                  const isOdd = idx % 2 === 1;
+                  const rowNumber = (currentPage - 1) * pageSize + idx + 1;
+                  const katId = doc.kategoriId || doc.subKategori?.kategoriId;
+                  const katIdx = kategoris.findIndex((k) => k.id === katId);
+                  const katNum = katIdx !== -1 ? `${katIdx + 1}.` : "";
+                  const katName = doc.kategori?.nama || kategoris[katIdx]?.nama || "—";
+                  const cleanKatName = stripLeadingNumber(katName);
 
                   return (
                     <tr
                       key={doc.id}
-                      className={`transition-colors border-b border-slate-100/80 ${
-                        isOdd ? "bg-slate-50/50" : "bg-white"
-                      } hover:bg-[#fdf2f8]/70`}
+                      className="hover:bg-slate-50/70 transition-colors group"
                     >
-                      {/* No */}
-                      <td className="py-2.5 px-3 text-center w-12 font-medium text-slate-400 text-xs">
-                        {(currentPage - 1) * pageSize + idx + 1}
+                      {/* Kolom Nomor Simpel & Bersih */}
+                      <td className="py-3 px-3 text-center">
+                        <span className="text-slate-400 font-medium text-xs tabular-nums">
+                          {rowNumber}
+                        </span>
                       </td>
 
-                      {/* Nama Dokumen */}
+                      {/* Nama Dokumen & Deskripsi */}
                       <td className="py-3 px-3">
-                        <p
-                          className="font-semibold text-xs text-slate-900 leading-tight line-clamp-1"
-                          title={doc.nama}
-                        >
-                          {doc.nama}
-                        </p>
-                        {doc.deskripsi && (
-                          <p
-                            className="text-[10px] text-slate-400 font-normal mt-0.5 line-clamp-1"
-                            title={doc.deskripsi}
-                          >
-                            {doc.deskripsi}
-                          </p>
-                        )}
-                      </td>
-
-                      {/* Kategori & Sub */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-col min-w-0 pr-4">
                           <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{
-                              backgroundColor:
-                                doc.subKategori?.kategori?.warna || "#a80063",
-                            }}
-                          />
-                          <div className="min-w-0">
-                            <p
-                              className="font-semibold text-xs text-slate-800 leading-tight truncate"
-                              title={doc.subKategori?.kategori?.nama || "-"}
+                            onClick={() => setPreviewDoc(doc)}
+                            className="font-bold text-xs text-slate-800 hover:text-[#a80063] transition-colors cursor-pointer line-clamp-1 leading-snug"
+                            title={doc.nama}
+                          >
+                            {doc.nama}
+                          </span>
+                          {doc.deskripsi && (
+                            <span
+                              className="text-[11px] text-slate-400 font-normal line-clamp-1 mt-0.5"
+                              title={doc.deskripsi}
                             >
-                              {doc.subKategori?.kategori?.nama || "—"}
-                            </p>
-                            <p
-                              className="text-[10px] text-slate-400 font-normal mt-0.5 truncate"
-                              title={doc.subKategori?.nama || "-"}
-                            >
-                              {doc.subKategori?.nama || "—"}
-                            </p>
+                              {doc.deskripsi}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Kategori & Sub-Kategori Hierarki */}
+                      <td className="py-3 px-3">
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-[11px] text-slate-700 truncate flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#a80063] shrink-0" />
+                            <span>
+                              {katNum} {cleanKatName}
+                            </span>
+                          </span>
+
+                          <div className="mt-0.5">
+                            {doc.subKategoriId && subKategoriMap.has(doc.subKategoriId) ? (
+                              <span className="text-slate-500 font-medium text-[11px] truncate flex items-center gap-1">
+                                <span className="text-[#a80063] font-bold shrink-0">
+                                  {subKategoriMap.get(doc.subKategoriId)!.code}
+                                </span>
+                                <span className="truncate">
+                                  {subKategoriMap.get(doc.subKategoriId)!.cleanName}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium italic text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">
+                                (Langsung di Kategori)
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
 
-                      {/* Tautan Drive (Icon Simpel) */}
-                      <td className="py-3 px-2.5 text-center w-16">
-                        {doc.linkDrive ? (
-                          <a
-                            href={doc.linkDrive}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] border border-slate-200/70 hover:border-[#fbcfe8] transition-colors"
-                            title="Buka Google Drive"
+                      {/* Drive Link Icon */}
+                      <td className="py-3 px-3 text-center">
+                        <a
+                          href={doc.linkDrive}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
+                          title="Buka di Google Drive"
+                        >
+                          <ExternalLink size={13} />
+                        </a>
+                      </td>
+
+                      {/* Status Dropdown */}
+                      <td className="py-3 px-3 text-center">
+                        <div className="relative inline-block text-left">
+                          <select
+                            value={doc.status}
+                            onChange={(e) =>
+                              handleStatusChange(doc.id, e.target.value as StatusDok)
+                            }
+                            className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border outline-none cursor-pointer transition-all appearance-none pr-6 ${
+                              doc.status === StatusDok.LENGKAP
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
+                                : doc.status === StatusDok.DALAM_PROSES
+                                ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/70"
+                                : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200/70"
+                            }`}
                           >
-                            <ExternalLink size={12} />
-                          </a>
-                        ) : (
-                          <span className="text-slate-300 text-xs">-</span>
-                        )}
+                            <option value={StatusDok.LENGKAP}>&bull; Lengkap</option>
+                            <option value={StatusDok.DALAM_PROSES}>&bull; Dalam Proses</option>
+                            <option value={StatusDok.BELUM}>&bull; Belum Lengkap</option>
+                          </select>
+                          <ChevronDown
+                            size={11}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50"
+                          />
+                        </div>
                       </td>
 
-                      {/* Status Switcher (Interactive) */}
-                      <td className="py-3 px-2 text-center w-36 whitespace-nowrap">
-                        <StatusBadge
-                          status={doc.status}
-                          dokumenId={doc.id}
-                          allowEdit={true}
-                          onStatusUpdated={(newStatus) => {
-                            setDokumens((prev) =>
-                              prev.map((d) =>
-                                d.id === doc.id ? { ...d, status: newStatus } : d
-                              )
-                            );
-                          }}
-                        />
-                      </td>
-
-                      {/* Aksi Buttons */}
-                      <td className="py-3 px-3 text-center w-24">
-                        <div className="inline-flex items-center justify-center gap-1">
-                          {/* Preview (FileText icon) */}
+                      {/* Tombol Aksi Ikon Ringkas */}
+                      <td className="py-3 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* Preview */}
                           <button
                             onClick={() => setPreviewDoc(doc)}
-                            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-[#a80063] bg-[#fdf2f8] hover:bg-[#fce7f3] border border-[#fbcfe8] transition-colors cursor-pointer"
-                            title="Pratinjau Dokumen"
+                            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-[#a80063] hover:bg-[#fdf2f8] border border-slate-200/70 hover:border-[#fbcfe8] transition-colors cursor-pointer"
+                            title="Preview Dokumen"
                           >
-                            <FileText size={12} />
+                            <Eye size={12} />
                           </button>
 
                           {/* Edit */}
                           <button
                             onClick={() => openEditModal(doc)}
-                            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/70 transition-colors cursor-pointer"
+                            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-[#a80063] hover:bg-[#fdf2f8] border border-slate-200/70 hover:border-[#fbcfe8] transition-colors cursor-pointer"
                             title="Edit Dokumen"
                           >
                             <Edit2 size={12} />
@@ -782,7 +819,7 @@ export default function DokumenManager({
             </h3>
             <p className="text-[11px] text-slate-500 mb-4">
               {modalMode === "create"
-                ? "Tambahkan dokumen atau berkas baru ke dalam sistem"
+                ? "Tambahkan berkas baru langsung ke kategori atau ke dalam sub-kategori"
                 : "Perbarui informasi dan tautan berkas dokumen"}
             </p>
 
@@ -802,39 +839,38 @@ export default function DokumenManager({
                 />
               </div>
 
-              {/* Deskripsi */}
+              {/* Deskripsi Singkat */}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                   Deskripsi / Keterangan Singkat
                 </label>
                 <textarea
                   name="deskripsi"
-                  rows={3}
+                  rows={2}
                   defaultValue={editingDoc?.deskripsi || ""}
                   placeholder="Catatan tambahan mengenai berkas dokumen ini (opsional)..."
                   className="w-full px-3 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
 
-              {/* Kategori & Sub-Kategori */}
+              {/* Kategori & Sub-Kategori (Pilihan Hierarkis) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Kategori <span className="text-rose-500">*</span>
+                    Kategori Utama <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={formKategoriId}
                     onChange={(e) => {
                       const newKatId = e.target.value;
                       setFormKategoriId(newKatId);
-                      const found = kategoris.find((k) => k.id === newKatId);
-                      setFormSubKategoriId(found?.subKategori[0]?.id || "");
+                      setFormSubKategoriId(""); // Default simpan langsung di kategori
                     }}
-                    className="w-full px-2.5 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer"
+                    className="w-full px-2.5 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer font-medium"
                   >
-                    {kategoris.map((k) => (
+                    {kategoris.map((k, idx) => (
                       <option key={k.id} value={k.id}>
-                        {k.nama}
+                        {idx + 1}. {stripLeadingNumber(k.nama)}
                       </option>
                     ))}
                   </select>
@@ -842,20 +878,25 @@ export default function DokumenManager({
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Sub-Kategori <span className="text-rose-500">*</span>
+                    Sub-Kategori <span className="text-slate-400 font-normal">(Pilihan Opsional)</span>
                   </label>
                   <select
                     value={formSubKategoriId}
                     onChange={(e) => setFormSubKategoriId(e.target.value)}
-                    required
-                    className="w-full px-2.5 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer"
+                    className="w-full px-2.5 py-2 bg-slate-50 text-xs text-slate-800 rounded-lg border border-slate-200 focus:border-[#a80063] focus:bg-white focus:ring-1 focus:ring-[#a80063]/20 outline-none transition-all cursor-pointer font-sans"
                   >
-                    {availableFormSubs.map((sub) => (
+                    <option value="">
+                      (Tanpa Sub-Kategori — Simpan Langsung di Kategori)
+                    </option>
+                    {availableFormSubsFlat.map((sub) => (
                       <option key={sub.id} value={sub.id}>
-                        {sub.nama}
+                        {sub.label}
                       </option>
                     ))}
                   </select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Bisa disimpan langsung di kategori, atau pilih sub-kategori / anak sub-kategori.
+                  </p>
                 </div>
               </div>
 

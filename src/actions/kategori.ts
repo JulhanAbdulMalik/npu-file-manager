@@ -19,6 +19,15 @@ export async function getKategoris() {
             email: true,
           },
         },
+        dokumen: {
+          where: {
+            subKategoriId: null,
+          },
+          orderBy: [
+            { urutan: "asc" },
+            { createdAt: "asc" },
+          ],
+        },
         subKategori: {
           orderBy: [
             { urutan: "asc" },
@@ -153,6 +162,7 @@ export async function createSubKategori(data: {
   deskripsi?: string | null;
   urutan?: number;
   kategoriId: string;
+  parentId?: string | null;
 }) {
   try {
     const session = await auth();
@@ -170,7 +180,10 @@ export async function createSubKategori(data: {
     let urutan = data.urutan;
     if (urutan === undefined) {
       const lastSub = await prisma.subKategori.findFirst({
-        where: { kategoriId: data.kategoriId },
+        where: {
+          kategoriId: data.kategoriId,
+          parentId: data.parentId || null,
+        },
         orderBy: { urutan: "desc" },
         select: { urutan: true },
       });
@@ -182,6 +195,7 @@ export async function createSubKategori(data: {
         nama: data.nama.trim(),
         deskripsi: data.deskripsi?.trim() || null,
         kategoriId: data.kategoriId,
+        parentId: data.parentId || null,
         urutan,
       },
     });
@@ -203,6 +217,7 @@ export async function updateSubKategori(
     deskripsi?: string | null;
     urutan?: number;
     kategoriId?: string;
+    parentId?: string | null;
   }
 ) {
   try {
@@ -218,6 +233,7 @@ export async function updateSubKategori(
         ...(data.deskripsi !== undefined ? { deskripsi: data.deskripsi?.trim() || null } : {}),
         ...(data.urutan !== undefined ? { urutan: data.urutan } : {}),
         ...(data.kategoriId ? { kategoriId: data.kategoriId } : {}),
+        ...(data.parentId !== undefined ? { parentId: data.parentId || null } : {}),
       },
     });
 

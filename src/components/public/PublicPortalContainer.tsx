@@ -9,6 +9,7 @@ import PublicBanner from "./PublicBanner";
 import PublicPortalView from "./PublicPortalView";
 import IntegratedPreviewPane from "./IntegratedPreviewPane";
 import { cn } from "@/lib/utils";
+import { stripLeadingNumber } from "@/lib/hierarchy";
 
 interface PublicPortalContainerProps {
   initialKategoris: any[];
@@ -49,18 +50,23 @@ export default function PublicPortalContainer({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isClosingPreview, setIsClosingPreview] = useState(false);
 
-  // Active category name for the compact banner
+  // Active category name for the compact banner with numbering 1., 2.
   const activeCategoryName = useMemo(() => {
     if (selectedKategoriId === "ALL") return "Semua Dokumen";
-    const found = initialKategoris.find((k) => k.id === selectedKategoriId);
-    return found ? found.nama : "Kategori Dokumen";
+    const foundIdx = initialKategoris.findIndex((k) => k.id === selectedKategoriId);
+    if (foundIdx !== -1) {
+      const num = `${foundIdx + 1}.`;
+      const clean = stripLeadingNumber(initialKategoris[foundIdx].nama);
+      return `${num} ${clean}`;
+    }
+    return "Kategori Dokumen";
   }, [initialKategoris, selectedKategoriId]);
 
-  // Accordion state per Kategori di Halaman Utama (Default terbuka semua, tombol toggle berstatus 'Tutup')
+  // Accordion state per Kategori di Halaman Utama (Default tertutup semua diawal agar rapi)
   const [expandedKats, setExpandedKats] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     initialKategoris.forEach((k) => {
-      initial[k.id] = true;
+      initial[k.id] = false;
     });
     return initial;
   });
@@ -68,7 +74,7 @@ export default function PublicPortalContainer({
   const isAllCollapsed = useMemo(() => {
     return (
       initialKategoris.length > 0 &&
-      initialKategoris.every((k) => expandedKats[k.id] === false)
+      initialKategoris.every((k) => expandedKats[k.id] !== true)
     );
   }, [initialKategoris, expandedKats]);
 
@@ -81,7 +87,7 @@ export default function PublicPortalContainer({
       });
       setExpandedKats(next);
     } else {
-      // Default / jika terbuka, klik untuk Tutup Semua
+      // Jika saat ini terbuka, klik untuk Tutup Semua
       const next: Record<string, boolean> = {};
       initialKategoris.forEach((k) => {
         next[k.id] = false;
@@ -93,8 +99,19 @@ export default function PublicPortalContainer({
   function handleToggleExpandKat(id: string) {
     setExpandedKats((prev) => ({
       ...prev,
-      [id]: !(prev[id] ?? true),
+      [id]: !(prev[id] ?? false),
     }));
+  }
+
+  function handleSelectKategori(id: string) {
+    setSelectedKategoriId(id);
+    if (id !== "ALL") {
+      // Otomatis buka kategori yang dipilih dari sidebar
+      setExpandedKats((prev) => ({
+        ...prev,
+        [id]: true,
+      }));
+    }
   }
 
   // Document selection handler dengan toggle halus & animasi keluar
@@ -149,7 +166,7 @@ export default function PublicPortalContainer({
       <PublicSidebar
         kategoris={initialKategoris}
         selectedKategoriId={selectedKategoriId}
-        onSelectKategori={setSelectedKategoriId}
+        onSelectKategori={handleSelectKategori}
         selectedSubId={selectedSubId}
         onSelectSub={setSelectedSubId}
         selectedStatus={selectedStatus}

@@ -15,15 +15,19 @@ export async function getDokumens(params?: {
   try {
     const where: any = {};
 
-    if (params?.subKategoriId) {
-      where.subKategoriId = params.subKategoriId;
-    } else if (params?.kategoriId) {
-      where.subKategori = {
-        kategoriId: params.kategoriId,
-      };
+    if (params?.kategoriId && params.kategoriId !== "ALL") {
+      where.kategoriId = params.kategoriId;
     }
 
-    if (params?.status) {
+    if (params?.subKategoriId && params.subKategoriId !== "ALL") {
+      if (params.subKategoriId === "DIRECT") {
+        where.subKategoriId = null;
+      } else {
+        where.subKategoriId = params.subKategoriId;
+      }
+    }
+
+    if (params?.status && (params.status as any) !== "ALL") {
       where.status = params.status;
     }
 
@@ -42,14 +46,21 @@ export async function getDokumens(params?: {
         { createdAt: "desc" },
       ],
       include: {
+        kategori: {
+          select: {
+            id: true,
+            nama: true,
+            warna: true,
+            ikon: true,
+            urutan: true,
+          },
+        },
         subKategori: {
           include: {
-            kategori: {
+            parent: {
               select: {
                 id: true,
                 nama: true,
-                warna: true,
-                ikon: true,
               },
             },
           },
@@ -69,9 +80,10 @@ export async function getDokumenById(id: string) {
     const dokumen = await prisma.dokumen.findUnique({
       where: { id },
       include: {
+        kategori: true,
         subKategori: {
           include: {
-            kategori: true,
+            parent: true,
           },
         },
       },
@@ -92,7 +104,8 @@ export async function createDokumen(data: {
   nama: string;
   deskripsi?: string | null;
   linkDrive: string;
-  subKategoriId: string;
+  kategoriId: string;
+  subKategoriId?: string | null;
   status?: StatusDok;
   urutan?: number;
 }) {
@@ -108,17 +121,22 @@ export async function createDokumen(data: {
     if (!data.linkDrive?.trim()) {
       return { success: false, error: "Tautan Google Drive wajib diisi" };
     }
-    if (!data.subKategoriId) {
-      return { success: false, error: "Sub-Kategori wajib dipilih" };
+    if (!data.kategoriId) {
+      return { success: false, error: "Kategori wajib dipilih" };
     }
 
     // Ekstrak driveFileId otomatis dari linkDrive
     const driveFileId = extractDriveFileId(data.linkDrive.trim());
 
+    const cleanSubKategoriId = data.subKategoriId && data.subKategoriId.trim() ? data.subKategoriId.trim() : null;
+
     let urutan = data.urutan;
     if (urutan === undefined) {
       const lastDoc = await prisma.dokumen.findFirst({
-        where: { subKategoriId: data.subKategoriId },
+        where: {
+          kategoriId: data.kategoriId,
+          subKategoriId: cleanSubKategoriId,
+        },
         orderBy: { urutan: "desc" },
         select: { urutan: true },
       });
@@ -133,7 +151,8 @@ export async function createDokumen(data: {
         driveFileId,
         status: data.status || StatusDok.BELUM,
         urutan,
-        subKategoriId: data.subKategoriId,
+        kategoriId: data.kategoriId,
+        subKategoriId: cleanSubKategoriId,
         uploadedById: session.user.id || null,
       },
     });
@@ -154,7 +173,8 @@ export async function updateDokumen(
     nama?: string;
     deskripsi?: string | null;
     linkDrive?: string;
-    subKategoriId?: string;
+    kategoriId?: string;
+    subKategoriId?: string | null;
     status?: StatusDok;
     urutan?: number;
   }
@@ -170,7 +190,12 @@ export async function updateDokumen(
     if (data.deskripsi !== undefined) updateData.deskripsi = data.deskripsi?.trim() || null;
     if (data.status) updateData.status = data.status;
     if (data.urutan !== undefined) updateData.urutan = data.urutan;
-    if (data.subKategoriId) updateData.subKategoriId = data.subKategoriId;
+    if (data.kategoriId) updateData.kategoriId = data.kategoriId;
+
+    if (data.subKategoriId !== undefined) {
+      updateData.subKategoriId =
+        data.subKategoriId && data.subKategoriId.trim() ? data.subKategoriId.trim() : null;
+    }
 
     if (data.linkDrive) {
       updateData.linkDrive = data.linkDrive.trim();

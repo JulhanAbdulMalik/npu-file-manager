@@ -1,6 +1,6 @@
 "use client";
 // src/components/public/PublicSidebar.tsx
-// Compact & Collapsible Fixed Sidebar with Plus Jakarta Sans & #a80063 Identity (Identik CDU Portal)
+// Compact & Collapsible Fixed Sidebar with Hierarchical Numbering (1., 1.1., 1.1.1.) & #a80063 Identity
 
 import { useState } from "react";
 import Link from "next/link";
@@ -9,20 +9,13 @@ import {
   ChevronRight,
   PanelLeftClose,
   Files,
-  Layers,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface SubKategoriItem {
-  id: string;
-  nama: string;
-  deskripsi?: string | null;
-  urutan: number;
-  dokumen: any[];
-}
+import {
+  stripLeadingNumber,
+  buildSubKategoriTree,
+  SubKategoriTreeNode,
+} from "@/lib/hierarchy";
 
 interface KategoriItem {
   id: string;
@@ -31,7 +24,9 @@ interface KategoriItem {
   warna?: string | null;
   ikon?: string | null;
   urutan: number;
-  subKategori: SubKategoriItem[];
+  dokumen?: any[];
+  subKategori: any[];
+  subKategoriTree?: SubKategoriTreeNode[];
 }
 
 interface PublicSidebarProps {
@@ -73,11 +68,47 @@ export default function PublicSidebar({
     setExpandedCats((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  const totalAllDocs = kategoris.reduce(
-    (acc, k) =>
-      acc + k.subKategori.reduce((sAcc, sub) => sAcc + sub.dokumen.length, 0),
-    0
-  );
+  // Helper untuk merender subkategori hierarki secara rekursif
+  function renderSubTreeNodes(
+    nodes: SubKategoriTreeNode[],
+    isSelectedKat: boolean
+  ) {
+    return nodes.map((node) => {
+      const isSubSelected = isSelectedKat && selectedSubId === node.id;
+      const paddingLeft = node.level === 1 ? "pl-2" : node.level === 2 ? "pl-4" : "pl-6";
+
+      return (
+        <div key={node.id} className="space-y-0.5">
+          <button
+            type="button"
+            onClick={() => {
+              if (onSelectSub) onSelectSub(node.id);
+            }}
+            className={cn(
+              "w-full flex items-center justify-between py-1 pr-2 rounded text-[11px] transition-colors truncate text-left cursor-pointer",
+              paddingLeft,
+              isSubSelected
+                ? "text-[#a80063] font-semibold bg-[#fdf2f8]"
+                : "text-slate-500 hover:text-slate-900 hover:bg-slate-50 font-medium"
+            )}
+            title={node.fullLabel}
+          >
+            <span className="truncate pr-1">
+              <span className="font-bold text-[#a80063] mr-1">{node.code}</span>
+              {node.cleanName}
+            </span>
+          </button>
+
+          {/* Render Anak & Anak Lagi dari Sub Kategori */}
+          {node.children && node.children.length > 0 && (
+            <div className="border-l border-slate-200/70 ml-2 space-y-0.5">
+              {renderSubTreeNodes(node.children, isSelectedKat)}
+            </div>
+          )}
+        </div>
+      );
+    });
+  }
 
   return (
     <aside
@@ -140,7 +171,7 @@ export default function PublicSidebar({
             <div className="h-px bg-slate-100 my-1.5 mx-1" />
           )}
 
-          {/* Item: Semua */}
+          {/* Item: Semua Dokumen */}
           <div className="relative">
             <button
               type="button"
@@ -148,7 +179,7 @@ export default function PublicSidebar({
                 onSelectKategori("ALL");
                 if (onSelectSub) onSelectSub("ALL");
               }}
-              title="Semua"
+              title="Semua Dokumen"
               className={cn(
                 "w-full flex items-center rounded-lg text-xs transition-all duration-150 relative cursor-pointer overflow-hidden",
                 isCollapsed
@@ -172,19 +203,22 @@ export default function PublicSidebar({
               />
 
               {!isCollapsed && (
-                <span className="flex-1 text-left truncate">Dokumen Aplikasi Siaga</span>
+                <span className="flex-1 text-left truncate">Semua Dokumen</span>
               )}
             </button>
           </div>
 
-          {/* Dynamic Categories */}
-          {kategoris.map((k) => {
+          {/* Dynamic Categories dengan Penomoran 1., 2., dst (Bukan Poin Butir) */}
+          {kategoris.map((k, katIdx) => {
             const isSelected = selectedKategoriId === k.id;
             const isExpanded = expandedCats[k.id];
-            const catDocCount = k.subKategori.reduce(
-              (acc, s) => acc + s.dokumen.length,
-              0
-            );
+            const katNumber = `${katIdx + 1}.`;
+            const cleanKatName = stripLeadingNumber(k.nama);
+
+            // SubKategori Tree
+            const subTree =
+              k.subKategoriTree ||
+              buildSubKategoriTree(k.subKategori as any, katIdx + 1);
 
             return (
               <div key={k.id} className="relative overflow-hidden">
@@ -195,12 +229,12 @@ export default function PublicSidebar({
                     if (onSelectSub) onSelectSub("ALL");
                     setExpandedCats((prev) => ({ ...prev, [k.id]: !prev[k.id] }));
                   }}
-                  title={k.nama}
+                  title={`${katNumber} ${cleanKatName}`}
                   className={cn(
                     "w-full flex items-center rounded-lg text-xs transition-all duration-150 relative cursor-pointer overflow-hidden text-left",
                     isCollapsed
-                  ? "w-10 h-10 mx-auto justify-center p-0 my-0.5"
-                  : "gap-2.5 px-2.5 py-2",
+                      ? "w-10 h-10 mx-auto justify-center p-0 my-0.5"
+                      : "gap-2 px-2.5 py-2",
                     isSelected
                       ? "bg-[#fdf2f8] text-[#a80063] font-semibold shadow-xs"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
@@ -210,21 +244,24 @@ export default function PublicSidebar({
                     <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-[#a80063] rounded-r-full" />
                   )}
 
+                  {/* Penomoran Angka 1. 2. 3. (Gantikan Poin Butir) */}
                   <span
                     className={cn(
-                      "w-1.5 h-1.5 rounded-full shrink-0 transition-all",
-                      isSelected ? "bg-[#a80063]" : "bg-slate-300"
+                      "font-bold text-xs shrink-0 transition-colors tabular-nums min-w-[16px]",
+                      isSelected ? "text-[#a80063]" : "text-slate-500"
                     )}
-                  />
+                  >
+                    {katNumber}
+                  </span>
 
                   {!isCollapsed && (
                     <>
-                      <span className="flex-1 text-left truncate" title={k.nama}>
-                        {k.nama}
+                      <span className="flex-1 text-left truncate" title={cleanKatName}>
+                        {cleanKatName}
                       </span>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        {k.subKategori.length > 0 && (
+                        {subTree.length > 0 && (
                           <div
                             onClick={(e) => toggleExpand(k.id, e)}
                             className="p-0.5 rounded hover:bg-slate-200/50 transition-colors"
@@ -243,39 +280,16 @@ export default function PublicSidebar({
                   )}
                 </button>
 
-                {/* Sub-Kategori Submenu (Full Mode only) with Smooth Accordion */}
-                {!isCollapsed && k.subKategori.length > 0 && (
+                {/* Sub-Kategori Submenu (Full Mode only) with Hierarchical 1.1., 1.1.1. */}
+                {!isCollapsed && subTree.length > 0 && (
                   <div
                     className={`accordion-wrapper ${
                       isExpanded ? "accordion-wrapper-open" : "accordion-wrapper-closed"
                     }`}
                   >
                     <div className="accordion-inner">
-                      <div className="mt-0.5 ml-4 pl-2 border-l border-slate-200/80 space-y-0.5 py-1">
-                        {k.subKategori.map((sub, subIdx) => {
-                          const isSubSelected = isSelected && selectedSubId === sub.id;
-
-                          return (
-                            <button
-                              key={sub.id}
-                              type="button"
-                              onClick={() => {
-                                onSelectKategori(k.id);
-                                if (onSelectSub) onSelectSub(sub.id);
-                              }}
-                              className={cn(
-                                "w-full flex items-center justify-between px-2 py-1 rounded text-[11px] transition-colors truncate text-left cursor-pointer",
-                                isSubSelected
-                                  ? "text-[#a80063] font-semibold bg-[#fdf2f8]"
-                                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-50 font-medium"
-                              )}
-                            >
-                              <span className="truncate pr-1">
-                                {subIdx + 1}. {sub.nama.replace(/^\d+[\.\s\-]+\s*/, "")}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div className="mt-0.5 ml-3 pl-2 border-l border-slate-200/80 space-y-0.5 py-1">
+                        {renderSubTreeNodes(subTree, isSelected)}
                       </div>
                     </div>
                   </div>

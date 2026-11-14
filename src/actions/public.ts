@@ -2,14 +2,15 @@
 
 import { prisma } from "@/lib/prisma";
 import { StatusDok } from "@prisma/client";
+import { buildSubKategoriTree } from "@/lib/hierarchy";
 
 /**
- * Mengambil data terstruktur (Kategori -> SubKategori -> Dokumen) untuk Portal Publik
+ * Mengambil data terstruktur (Kategori -> SubKategori Hierarki -> Dokumen) untuk Portal Publik
  */
 export async function getPublicPortalData(search?: string, kategoriId?: string) {
   try {
     const whereKategori: any = {};
-    if (kategoriId) {
+    if (kategoriId && kategoriId !== "ALL") {
       whereKategori.id = kategoriId;
     }
 
@@ -29,6 +30,16 @@ export async function getPublicPortalData(search?: string, kategoriId?: string) 
         { createdAt: "asc" },
       ],
       include: {
+        dokumen: {
+          where: {
+            subKategoriId: null,
+            ...docFilter,
+          },
+          orderBy: [
+            { urutan: "asc" },
+            { createdAt: "asc" },
+          ],
+        },
         subKategori: {
           orderBy: [
             { urutan: "asc" },
@@ -47,7 +58,19 @@ export async function getPublicPortalData(search?: string, kategoriId?: string) 
       },
     });
 
-    return { success: true, data: kategoris };
+    // Format dengan penomoran bertingkat 1., 1.1., 1.1.1.
+    const structured = kategoris.map((kat, katIdx) => {
+      const katIndex = katIdx + 1;
+      const subTree = buildSubKategoriTree(kat.subKategori as any, katIndex);
+
+      return {
+        ...kat,
+        katIndex,
+        subKategoriTree: subTree,
+      };
+    });
+
+    return { success: true, data: structured };
   } catch (error: any) {
     console.error("Error in getPublicPortalData:", error);
     return { success: false, error: error.message || "Gagal mengambil data portal publik" };
@@ -80,6 +103,11 @@ export async function getDashboardStats() {
           id: true,
           nama: true,
           warna: true,
+          dokumen: {
+            select: {
+              status: true,
+            },
+          },
           subKategori: {
             select: {
               id: true,
@@ -97,13 +125,22 @@ export async function getDashboardStats() {
     const persentaseLengkap =
       totalDokumen > 0 ? Math.round((lengkapCount / totalDokumen) * 1000) / 10 : 0;
 
-    // Hitung per kategori
-    const perKategori = kategoriStats.map((k) => {
+    // Hitung per kategori (termasuk dokumen langsung di kategori + dokumen di seluruh subkategori)
+    const perKategori = kategoriStats.map((k, idx) => {
       let kTotal = 0;
       let kLengkap = 0;
       let kProses = 0;
       let kBelum = 0;
 
+      // Hitung dokumen langsung di kategori
+      for (const doc of k.dokumen) {
+        kTotal++;
+        if (doc.status === StatusDok.LENGKAP) kLengkap++;
+        else if (doc.status === StatusDok.DALAM_PROSES) kProses++;
+        else if (doc.status === StatusDok.BELUM) kBelum++;
+      }
+
+      // Hitung dokumen di sub-kategori
       for (const sub of k.subKategori) {
         for (const doc of sub.dokumen) {
           kTotal++;
@@ -117,7 +154,7 @@ export async function getDashboardStats() {
 
       return {
         id: k.id,
-        nama: k.nama,
+        nama: `${idx + 1}. ${k.nama.replace(/^(\d+(\.\d+)*[\.\s\-]*)*/, "").trim()}`,
         warna: k.warna || "#a80063",
         total: kTotal,
         lengkap: kLengkap,
