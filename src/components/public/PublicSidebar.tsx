@@ -60,21 +60,27 @@ export default function PublicSidebar({
   isCollapsed,
   onToggleCollapse,
 }: PublicSidebarProps) {
-  // Accordion state for expanded categories - Default tertutup diawal saat refresh
-  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  // Accordion state for expanded categories - Default terbuka diawal
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    kategoris.forEach((k) => {
+      initial[k.id] = true;
+    });
+    return initial;
+  });
 
   function toggleExpand(id: string, e?: React.MouseEvent) {
     if (e) e.stopPropagation();
-    setExpandedCats((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpandedCats((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
   }
 
   // Helper untuk merender subkategori hierarki secara rekursif
   function renderSubTreeNodes(
     nodes: SubKategoriTreeNode[],
-    isSelectedKat: boolean
+    kategoriId: string
   ) {
     return nodes.map((node) => {
-      const isSubSelected = isSelectedKat && selectedSubId === node.id;
+      const isSubSelected = selectedKategoriId === kategoriId && selectedSubId === node.id;
       const paddingLeft = node.level === 1 ? "pl-2" : node.level === 2 ? "pl-4" : "pl-6";
 
       return (
@@ -82,6 +88,7 @@ export default function PublicSidebar({
           <button
             type="button"
             onClick={() => {
+              onSelectKategori(kategoriId);
               if (onSelectSub) onSelectSub(node.id);
             }}
             className={cn(
@@ -102,7 +109,7 @@ export default function PublicSidebar({
           {/* Render Anak & Anak Lagi dari Sub Kategori */}
           {node.children && node.children.length > 0 && (
             <div className="border-l border-slate-200/70 ml-2 space-y-0.5">
-              {renderSubTreeNodes(node.children, isSelectedKat)}
+              {renderSubTreeNodes(node.children, kategoriId)}
             </div>
           )}
         </div>
@@ -203,7 +210,7 @@ export default function PublicSidebar({
               />
 
               {!isCollapsed && (
-                <span className="flex-1 text-left truncate">Semua Dokumen</span>
+                <span className="flex-1 text-left truncate">Dokumen Aplikasi SIAGA</span>
               )}
             </button>
           </div>
@@ -211,7 +218,7 @@ export default function PublicSidebar({
           {/* Dynamic Categories dengan Penomoran 1., 2., dst (Bukan Poin Butir) */}
           {kategoris.map((k, katIdx) => {
             const isSelected = selectedKategoriId === k.id;
-            const isExpanded = expandedCats[k.id];
+            const isExpanded = expandedCats[k.id] ?? true;
             const katNumber = `${katIdx + 1}.`;
             const cleanKatName = stripLeadingNumber(k.nama);
 
@@ -227,7 +234,7 @@ export default function PublicSidebar({
                   onClick={() => {
                     onSelectKategori(k.id);
                     if (onSelectSub) onSelectSub("ALL");
-                    setExpandedCats((prev) => ({ ...prev, [k.id]: !prev[k.id] }));
+                    setExpandedCats((prev) => ({ ...prev, [k.id]: !(prev[k.id] ?? true) }));
                   }}
                   title={`${katNumber} ${cleanKatName}`}
                   className={cn(
@@ -289,7 +296,7 @@ export default function PublicSidebar({
                   >
                     <div className="accordion-inner">
                       <div className="mt-0.5 ml-3 pl-2 border-l border-slate-200/80 space-y-0.5 py-1">
-                        {renderSubTreeNodes(subTree, isSelected)}
+                        {renderSubTreeNodes(subTree, k.id)}
                       </div>
                     </div>
                   </div>

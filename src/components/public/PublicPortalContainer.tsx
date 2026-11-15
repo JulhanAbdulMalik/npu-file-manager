@@ -62,11 +62,11 @@ export default function PublicPortalContainer({
     return "Kategori Dokumen";
   }, [initialKategoris, selectedKategoriId]);
 
-  // Accordion state per Kategori di Halaman Utama (Default tertutup semua diawal agar rapi)
+  // Accordion state per Kategori di Halaman Utama (Default terbuka semua diawal)
   const [expandedKats, setExpandedKats] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     initialKategoris.forEach((k) => {
-      initial[k.id] = false;
+      initial[k.id] = true;
     });
     return initial;
   });
@@ -74,7 +74,7 @@ export default function PublicPortalContainer({
   const isAllCollapsed = useMemo(() => {
     return (
       initialKategoris.length > 0 &&
-      initialKategoris.every((k) => expandedKats[k.id] !== true)
+      initialKategoris.every((k) => expandedKats[k.id] === false)
     );
   }, [initialKategoris, expandedKats]);
 
@@ -99,7 +99,7 @@ export default function PublicPortalContainer({
   function handleToggleExpandKat(id: string) {
     setExpandedKats((prev) => ({
       ...prev,
-      [id]: !(prev[id] ?? false),
+      [id]: !(prev[id] ?? true),
     }));
   }
 

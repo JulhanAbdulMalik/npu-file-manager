@@ -71,11 +71,11 @@ export default function PublicPortalView({
   expandedKats: propExpandedKats,
   onToggleExpandKat: propOnToggleExpandKat,
 }: PublicPortalViewProps) {
-  // Accordion state per Kategori di Halaman Utama (Default tertutup semua diawal agar rapi)
+  // Accordion state per Kategori di Halaman Utama (Default terbuka semua diawal)
   const [localExpandedKats, setLocalExpandedKats] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     kategoris.forEach((k) => {
-      initial[k.id] = false;
+      initial[k.id] = true;
     });
     return initial;
   });
@@ -89,7 +89,7 @@ export default function PublicPortalView({
     } else {
       setLocalExpandedKats((prev) => ({
         ...prev,
-        [id]: !(prev[id] ?? false),
+        [id]: !(prev[id] ?? true),
       }));
     }
   }
@@ -382,7 +382,7 @@ export default function PublicPortalView({
       <div className="space-y-4">
         {filteredKategoris.map((kategori) => {
           const kategoriColor = kategori.warna || "#a80063";
-          const isExpanded = expandedKats[kategori.id] ?? false;
+          const isExpanded = expandedKats[kategori.id] ?? true;
           const katNumber = `${kategori.katIndex}.`;
           const catDocCount =
             kategori.directDocs.length +
