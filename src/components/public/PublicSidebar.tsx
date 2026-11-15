@@ -90,9 +90,12 @@ export default function PublicSidebar({
             onClick={() => {
               onSelectKategori(kategoriId);
               if (onSelectSub) onSelectSub(node.id);
+              if (typeof window !== "undefined" && window.innerWidth < 768) {
+                onToggleCollapse();
+              }
             }}
             className={cn(
-              "w-full flex items-center justify-between py-1 pr-2 rounded text-[11px] transition-colors truncate text-left cursor-pointer",
+              "w-full flex items-center justify-between py-1.5 sm:py-1 pr-2 rounded text-xs sm:text-[11px] transition-colors truncate text-left cursor-pointer min-h-[34px] sm:min-h-[28px]",
               paddingLeft,
               isSubSelected
                 ? "text-[#a80063] font-semibold bg-[#fdf2f8]"
@@ -158,10 +161,10 @@ export default function PublicSidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="w-7 h-7 rounded-lg text-slate-400 hover:text-[#a80063] hover:bg-[#fdf2f8] flex items-center justify-center transition-all cursor-pointer shrink-0"
-            title="Ciutkan Sidebar (Mode Mini)"
+            className="w-8 h-8 sm:w-7 sm:h-7 rounded-lg text-slate-400 hover:text-[#a80063] hover:bg-[#fdf2f8] flex items-center justify-center transition-all cursor-pointer shrink-0"
+            title="Ciutkan Sidebar"
           >
-            <PanelLeftClose size={15} />
+            <PanelLeftClose size={16} />
           </button>
         )}
       </div>
@@ -185,13 +188,16 @@ export default function PublicSidebar({
               onClick={() => {
                 onSelectKategori("ALL");
                 if (onSelectSub) onSelectSub("ALL");
+                if (typeof window !== "undefined" && window.innerWidth < 768) {
+                  onToggleCollapse();
+                }
               }}
               title="Semua Dokumen"
               className={cn(
                 "w-full flex items-center rounded-lg text-xs transition-all duration-150 relative cursor-pointer overflow-hidden",
                 isCollapsed
                   ? "w-10 h-10 mx-auto justify-center p-0 my-0.5"
-                  : "gap-2.5 px-2.5 py-2",
+                  : "gap-2.5 px-2.5 py-2.5 sm:py-2 min-h-[42px] sm:min-h-[36px]",
                 selectedKategoriId === "ALL"
                   ? "bg-[#fdf2f8] text-[#a80063] font-semibold shadow-xs"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
@@ -235,13 +241,16 @@ export default function PublicSidebar({
                     onSelectKategori(k.id);
                     if (onSelectSub) onSelectSub("ALL");
                     setExpandedCats((prev) => ({ ...prev, [k.id]: !(prev[k.id] ?? true) }));
+                    if (typeof window !== "undefined" && window.innerWidth < 768) {
+                      onToggleCollapse();
+                    }
                   }}
                   title={`${katNumber} ${cleanKatName}`}
                   className={cn(
                     "w-full flex items-center rounded-lg text-xs transition-all duration-150 relative cursor-pointer overflow-hidden text-left",
                     isCollapsed
                       ? "w-10 h-10 mx-auto justify-center p-0 my-0.5"
-                      : "gap-2 px-2.5 py-2",
+                      : "gap-2 px-2.5 py-2.5 sm:py-2 min-h-[42px] sm:min-h-[36px]",
                     isSelected
                       ? "bg-[#fdf2f8] text-[#a80063] font-semibold shadow-xs"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
@@ -271,10 +280,10 @@ export default function PublicSidebar({
                         {subTree.length > 0 && (
                           <div
                             onClick={(e) => toggleExpand(k.id, e)}
-                            className="p-0.5 rounded hover:bg-slate-200/50 transition-colors"
+                            className="p-1 sm:p-0.5 rounded-md hover:bg-slate-200/50 transition-colors min-w-[28px] min-h-[28px] flex items-center justify-center cursor-pointer"
                           >
                             <ChevronRight
-                              size={13}
+                              size={14}
                               className={cn(
                                 "text-slate-400 transition-transform duration-200",
                                 isExpanded && "rotate-90 text-[#a80063]"

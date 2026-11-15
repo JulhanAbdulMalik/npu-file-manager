@@ -18,9 +18,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
     const saved = localStorage.getItem("npu_sidebar_collapsed");
     if (saved !== null) {
       setIsCollapsed(saved === "true");
+    } else if (isMobile) {
+      setIsCollapsed(true);
     }
   }, []);
 

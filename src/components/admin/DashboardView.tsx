@@ -198,7 +198,7 @@ export default function DashboardView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full">
       {/* ── 1. Top Greeting & Action Controls ────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
         <div>
@@ -339,8 +339,68 @@ export default function DashboardView({
               </Link>
             </div>
 
-            {/* Table Content */}
-            <div className="overflow-x-auto">
+            {/* MOBILE LIST VIEW (< md) */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {docsList.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  Belum ada dokumen yang terdaftar.
+                </div>
+              ) : (
+                docsList.map((doc, idx) => (
+                  <div key={doc.id} className="py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <p className="font-semibold text-xs text-slate-900 truncate" title={doc.nama}>
+                          {doc.nama}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {doc.linkDrive && (
+                          <a
+                            href={doc.linkDrive}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] border border-slate-200/70"
+                            title="Buka Google Drive"
+                          >
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+
+                        <button
+                          onClick={() => setActivePreviewDoc(doc)}
+                          className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-[#a80063] bg-[#fdf2f8] border border-[#fbcfe8]"
+                          title="Pratinjau Dokumen"
+                        >
+                          <FileText size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10.5px] text-slate-500">
+                      <span className="truncate pr-2">
+                        {doc.subKategori?.kategori?.nama || "Kategori"} &bull; {doc.subKategori?.nama || "Umum"}
+                      </span>
+                      <StatusBadge
+                        status={doc.status}
+                        dokumenId={doc.id}
+                        allowEdit={true}
+                        onStatusUpdated={(newStatus) =>
+                          handleStatusUpdated(doc.id, newStatus)
+                        }
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* DESKTOP TABLE VIEW (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse table-auto">
                 <thead>
                   <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">

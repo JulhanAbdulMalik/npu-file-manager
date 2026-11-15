@@ -102,11 +102,19 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   }
 
+  function handleNavClick() {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      toggleSidebar();
+    }
+  }
+
   return (
     <aside
       className={cn(
-        "shrink-0 bg-white sticky top-0 h-screen flex flex-col z-40 border-r border-slate-200/70 shadow-[1px_0_8px_rgba(0,0,0,0.015)] transition-all duration-300 ease-in-out select-none overflow-x-hidden overflow-y-hidden",
-        isCollapsed ? "w-[68px]" : "w-[230px]"
+        "fixed top-0 left-0 bottom-0 h-screen flex flex-col z-40 bg-white border-r border-slate-200/70 shadow-[1px_0_8px_rgba(0,0,0,0.015)] transition-all duration-300 ease-in-out select-none overflow-x-hidden overflow-y-hidden md:sticky md:top-0 md:shrink-0",
+        isCollapsed
+          ? "w-[68px] -translate-x-full md:translate-x-0"
+          : "w-[250px] md:w-[230px] translate-x-0 max-md:shadow-2xl"
       )}
     >
       {/* ── Brand Header & Toggle ────────────────────────────────────────────── */}
@@ -182,12 +190,13 @@ export default function Sidebar() {
                       <Link
                         href={hasChildren ? item.children![0].href : item.href}
                         prefetch={false}
+                        onClick={handleNavClick}
                         title={item.label}
                         className={cn(
                           "flex items-center rounded-lg text-xs transition-all duration-150 relative cursor-pointer overflow-hidden",
                           isCollapsed
                             ? "w-10 h-10 mx-auto justify-center p-0 my-0.5"
-                            : "gap-2.5 px-2.5 py-2",
+                            : "gap-2.5 px-2.5 py-2.5 sm:py-2 min-h-[42px] sm:min-h-[36px]",
                           active
                             ? "bg-[#fdf2f8] text-[#a80063] font-semibold shadow-xs"
                             : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
@@ -239,8 +248,9 @@ export default function Sidebar() {
                               key={child.href}
                               href={child.href}
                               prefetch={false}
+                              onClick={handleNavClick}
                               className={cn(
-                                "block px-2.5 py-1 rounded text-[11px] transition-colors truncate",
+                                "block px-2.5 py-1.5 sm:py-1 rounded text-xs sm:text-[11px] transition-colors truncate min-h-[32px] sm:min-h-0",
                                 pathname === child.href
                                   ? "text-[#a80063] font-semibold bg-[#fdf2f8]"
                                   : "text-slate-500 hover:text-slate-900 hover:bg-slate-50 font-medium"

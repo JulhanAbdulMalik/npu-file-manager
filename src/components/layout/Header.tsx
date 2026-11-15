@@ -65,10 +65,10 @@ export default function Header() {
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#a80063]" />
 
       {/* Left: Sidebar Toggle + Quick Search Bar */}
-      <div className="flex items-center gap-2.5 sm:gap-3 flex-1 max-w-md">
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-md">
         <button
           onClick={toggleSidebar}
-          className="w-8 h-8 rounded-lg text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] border border-slate-200/70 flex items-center justify-center transition-all cursor-pointer shrink-0"
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] border border-slate-200/70 flex items-center justify-center transition-all cursor-pointer shrink-0 min-w-[36px]"
           title={isCollapsed ? "Perluas Sidebar" : "Ciutkan Sidebar"}
         >
           <PanelLeft size={16} />
@@ -81,8 +81,8 @@ export default function Header() {
           />
           <input
             type="text"
-            placeholder="Cari dokumen, kategori... (Ctrl+K)"
-            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-xs text-slate-800 placeholder:text-slate-400 rounded-lg border border-slate-200/80 focus:border-[#a80063] focus:ring-1 focus:ring-[#a80063]/20 transition-all outline-none"
+            placeholder="Cari di admin... (Ctrl+K)"
+            className="w-full pl-8 pr-3 py-2 sm:py-1.5 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-xs text-slate-800 placeholder:text-slate-400 rounded-lg border border-slate-200/80 focus:border-[#a80063] focus:ring-1 focus:ring-[#a80063]/20 transition-all outline-none"
           />
         </div>
       </div>

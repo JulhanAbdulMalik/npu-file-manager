@@ -138,8 +138,8 @@ export default function TablePagination({
           <ChevronLeft size={13} />
         </button>
 
-        {/* Numbered Page Buttons */}
-        <div className="flex items-center gap-1 mx-0.5">
+        {/* Numbered Page Buttons for Tablet & Desktop */}
+        <div className="hidden sm:flex items-center gap-1 mx-0.5">
           {pages.map((p, idx) => {
             if (p === "...") {
               return (
@@ -171,6 +171,11 @@ export default function TablePagination({
               </button>
             );
           })}
+        </div>
+
+        {/* Mobile Page Indicator (< sm) */}
+        <div className="sm:hidden px-2 text-[11px] font-bold text-slate-700 select-none">
+          {safeCurrentPage} / {totalPages}
         </div>
 
         {/* Next Page Button */}

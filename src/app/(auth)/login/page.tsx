@@ -119,7 +119,7 @@ function LoginForm() {
       <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-[#d946ef]/8 blur-3xl pointer-events-none" />
 
       {/* Main Card Frame */}
-      <div className="w-full max-w-[980px] bg-white rounded-2xl sm:rounded-3xl shadow-[0_16px_45px_-12px_rgba(15,23,42,0.09)] border border-slate-200/80 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[520px] lg:h-[565px] relative z-10">
+      <div className="w-full max-w-[440px] lg:max-w-[980px] bg-white rounded-2xl sm:rounded-3xl shadow-[0_16px_45px_-12px_rgba(15,23,42,0.09)] border border-slate-200/80 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[480px] lg:h-[565px] relative z-10">
         
         {/* ── LEFT PANEL: Form Area ─────────────── */}
         <div className="lg:col-span-6 p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-white relative">
@@ -176,7 +176,7 @@ function LoginForm() {
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="username"
                     disabled={loading}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-xs text-slate-900 rounded-lg border border-slate-200 focus:border-[#a80063] focus:ring-1 focus:ring-[#a80063]/20 transition-all outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 sm:py-2 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-sm sm:text-xs text-slate-900 rounded-lg border border-slate-200 focus:border-[#a80063] focus:ring-1 focus:ring-[#a80063]/20 transition-all outline-none"
                   />
                 </div>
               </div>
@@ -201,15 +201,15 @@ function LoginForm() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     disabled={loading}
-                    className="w-full pl-9 pr-9 py-2 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-xs text-slate-900 rounded-lg border border-slate-200 focus:border-[#a80063] focus:ring-1 focus:ring-[#a80063]/20 transition-all outline-none"
+                    className="w-full pl-9 pr-10 py-2.5 sm:py-2 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-sm sm:text-xs text-slate-900 rounded-lg border border-slate-200 focus:border-[#a80063] focus:ring-1 focus:ring-[#a80063]/20 transition-all outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 cursor-pointer transition-colors"
                     title={showPassword ? "Sembunyikan password" : "Lihat password"}
                   >
-                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
@@ -218,7 +218,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-1.5 py-2.5 px-4 bg-[#a80063] hover:bg-[#8c0052] active:bg-[#770046] text-white text-xs font-bold rounded-lg shadow-xs shadow-[#a80063]/20 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full mt-2 py-3 sm:py-2.5 px-4 bg-[#a80063] hover:bg-[#8c0052] active:bg-[#770046] text-white text-xs font-bold rounded-lg shadow-xs shadow-[#a80063]/20 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed min-h-[44px]"
               >
                 {loading ? (
                   <>
@@ -254,11 +254,11 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* ── RIGHT PANEL: Hero Showcase Slider ─────────── */}
+        {/* ── RIGHT PANEL: Hero Showcase Slider (Hidden on Mobile) ─────────── */}
         <div
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
-          className="lg:col-span-6 relative bg-[#240015] p-6 sm:p-8 lg:p-10 flex flex-col justify-between overflow-hidden text-white min-h-[400px] lg:min-h-full"
+          className="hidden lg:flex lg:col-span-6 relative bg-[#240015] p-6 sm:p-8 lg:p-10 flex-col justify-between overflow-hidden text-white min-h-[400px] lg:min-h-full"
         >
           {/* Subtle Grid Pattern Overlay */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />

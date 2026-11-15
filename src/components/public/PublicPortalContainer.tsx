@@ -28,12 +28,16 @@ export default function PublicPortalContainer({
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
 
   // State for Collapsible Fixed Left Sidebar (ala CDU Portal)
+  // Default: tertutup di mobile (< 768px) agar tidak menutupi layar saat pertama buka, terbuka di desktop
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
     const saved = localStorage.getItem("npu_public_sidebar_collapsed");
     if (saved !== null) {
       setIsSidebarCollapsed(saved === "true");
+    } else if (isMobile) {
+      setIsSidebarCollapsed(true);
     }
   }, []);
 
@@ -112,6 +116,18 @@ export default function PublicPortalContainer({
         [id]: true,
       }));
     }
+    // Auto-tutup sidebar drawer di mobile agar langsung fokus ke daftar berkas
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsSidebarCollapsed(true);
+    }
+  }
+
+  function handleSelectSub(subId: string) {
+    setSelectedSubId(subId);
+    // Auto-tutup sidebar drawer di mobile
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsSidebarCollapsed(true);
+    }
   }
 
   // Document selection handler dengan toggle halus & animasi keluar
@@ -123,16 +139,6 @@ export default function PublicPortalContainer({
     setIsClosingPreview(false);
     setPreviewDoc(doc);
     setIsPreviewOpen(true);
-
-    // Pada layar mobile (< 1024px), otomatis scroll halus ke posisi tab preview
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      setTimeout(() => {
-        const previewEl = document.getElementById("integrated-preview-pane");
-        if (previewEl) {
-          previewEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 100);
-    }
   }
 
   function handleClosePreview() {
@@ -144,6 +150,20 @@ export default function PublicPortalContainer({
       setPreviewDoc(null);
     }, 450); // Selaras dengan durasi animasi keluar tab preview (450ms)
   }
+
+  // Kunci scroll halaman latar belakang saat modal preview aktif di mobile (< lg)
+  useEffect(() => {
+    if (isPreviewOpen && !isClosingPreview) {
+      const origOverflow = document.body.style.overflow;
+      const origOverscroll = document.body.style.overscrollBehavior;
+      document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
+      return () => {
+        document.body.style.overflow = origOverflow;
+        document.body.style.overscrollBehavior = origOverscroll;
+      };
+    }
+  }, [isPreviewOpen, isClosingPreview]);
 
   function handleResetFilters() {
     setSelectedKategoriId("ALL");
@@ -168,7 +188,7 @@ export default function PublicPortalContainer({
         selectedKategoriId={selectedKategoriId}
         onSelectKategori={handleSelectKategori}
         selectedSubId={selectedSubId}
-        onSelectSub={setSelectedSubId}
+        onSelectSub={handleSelectSub}
         selectedStatus={selectedStatus}
         onSelectStatus={setSelectedStatus}
         stats={initialStats}
@@ -234,19 +254,19 @@ export default function PublicPortalContainer({
             />
           </main>
 
-          {/* TAB 3: RIGHT INTEGRATED PREVIEW PANE WRAPPER (STICKY TOP - TETAP DIPOSISI SAAT SCROLL) */}
+          {/* TAB 3: RIGHT INTEGRATED PREVIEW PANE (DESKTOP SPLIT VIEW: >= lg) */}
           <div
             className={cn(
-              "sticky top-16 lg:top-[72px] h-[calc(100vh-5.5rem)] shrink-0 transition-all duration-450 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              "hidden lg:block sticky top-16 lg:top-[72px] h-[calc(100vh-5.5rem)] shrink-0 transition-all duration-450 ease-[cubic-bezier(0.16,1,0.3,1)]",
               isPreviewOpen && !isClosingPreview
-                ? "w-full lg:w-[48%] xl:w-[50%] opacity-100"
-                : "w-0 opacity-0 pointer-events-none lg:w-0 overflow-hidden"
+                ? "w-[48%] xl:w-[50%] opacity-100"
+                : "w-0 opacity-0 pointer-events-none overflow-hidden"
             )}
           >
             {previewDoc && (
               <div
                 className={cn(
-                  "w-[calc(100vw-3rem)] sm:w-[calc(100vw-4rem)] lg:w-full h-full transition-transform duration-450 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
+                  "w-full h-full transition-transform duration-450 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
                   isPreviewOpen && !isClosingPreview
                     ? "translate-x-0"
                     : "translate-x-full"
@@ -261,6 +281,37 @@ export default function PublicPortalContainer({
             )}
           </div>
         </div>
+
+        {/* ── MOBILE PREVIEW FULL-SCREEN / BOTTOM-SHEET MODAL (< lg) ──────── */}
+        {previewDoc && (
+          <div
+            className={cn(
+              "fixed inset-0 z-50 lg:hidden flex flex-col justify-end sm:justify-center bg-slate-900/60 backdrop-blur-xs overscroll-contain transition-opacity duration-300",
+              isPreviewOpen && !isClosingPreview
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none"
+            )}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) handleClosePreview();
+            }}
+          >
+            <div
+              className={cn(
+                "h-[92vh] sm:h-[88vh] w-full sm:max-w-xl sm:mx-auto bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden overscroll-contain transition-transform duration-350 ease-out will-change-transform",
+                isPreviewOpen && !isClosingPreview
+                  ? "translate-y-0 scale-100"
+                  : "translate-y-full sm:scale-95"
+              )}
+            >
+              <IntegratedPreviewPane
+                dokumen={previewDoc}
+                onClose={handleClosePreview}
+                isClosing={isClosingPreview}
+                isMobileModal={true}
+              />
+            </div>
+          </div>
+        )}
 
         {/* ── FOOTER FULL WIDTH ────────────────────────────────────────── */}
         <footer className="mt-auto border-t border-slate-200/70 bg-white py-3.5 px-4 sm:px-6 text-xs text-slate-500 w-full">

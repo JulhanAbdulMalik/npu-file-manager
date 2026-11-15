@@ -59,13 +59,13 @@ export default function PublicBanner({
     statusOptions.find((opt) => opt.id === selectedStatus) || statusOptions[0];
 
   return (
-    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
       {/* Left: Clean Heading & Subtitle (Identik CDU Portal Greeting) */}
       <div>
-        <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-none">
+        <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-snug">
           Evaluasi Lapangan Fakultas Kedokteran dan Ilmu Kesehatan
         </h1>
-        <p className="text-xs text-slate-500 font-normal mt-1.5">
+        <p className="text-[11.5px] sm:text-xs text-slate-500 font-normal mt-1">
           Universitas Nusa Putra &bull; Fokus tampilan:{" "}
           <span className="font-semibold text-[#a80063]">
             {activeCategoryName}
@@ -74,23 +74,23 @@ export default function PublicBanner({
       </div>
 
       {/* Right: Dropdown Filter Status & Tombol Toggle Kategori (Seiras & Simpel) */}
-      <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 self-start sm:self-auto shrink-0 w-full sm:w-auto">
         {/* Tombol Toggle Buka / Tutup Semua Kategori (Seiras dengan Filter Status) */}
         {onToggleCollapseAll && (
           <button
             type="button"
             onClick={onToggleCollapseAll}
-            className="h-8 px-3 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-[#fbcfe8] rounded-lg text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+            className="h-8.5 sm:h-8 px-3 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-[#fbcfe8] rounded-lg text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
             title={isAllCollapsed ? "Buka semua kategori dokumen" : "Tutup semua kategori dokumen"}
           >
             {isAllCollapsed ? (
               <>
-                <ChevronsDown size={13} className="text-[#a80063]" />
+                <ChevronsDown size={14} className="text-[#a80063]" />
                 <span>Buka</span>
               </>
             ) : (
               <>
-                <ChevronsUp size={13} className="text-slate-400" />
+                <ChevronsUp size={14} className="text-slate-400" />
                 <span>Tutup</span>
               </>
             )}
@@ -103,7 +103,7 @@ export default function PublicBanner({
             <button
               type="button"
               onClick={() => setIsOpen(!isOpen)}
-              className="h-8 px-3 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-[#fbcfe8] rounded-lg text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-2 cursor-pointer transition-all"
+              className="h-8.5 sm:h-8 px-3 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-[#fbcfe8] rounded-lg text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-2 cursor-pointer transition-all"
               title="Filter status dokumen"
             >
               <span>
@@ -120,7 +120,7 @@ export default function PublicBanner({
 
             {/* Popup Menu */}
             {isOpen && (
-              <div className="absolute top-full mt-1.5 right-0 w-48 bg-white rounded-xl border border-slate-200/90 shadow-lg p-1 z-50 animate-fade-in">
+              <div className="absolute top-full mt-1.5 left-0 sm:left-auto sm:right-0 w-52 bg-white rounded-xl border border-slate-200/90 shadow-xl p-1 z-50 animate-fade-in">
                 {statusOptions.map((opt) => {
                   const isSelected = selectedStatus === opt.id;
                   return (
@@ -132,7 +132,7 @@ export default function PublicBanner({
                         setIsOpen(false);
                       }}
                       className={cn(
-                        "w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer text-left",
+                        "w-full flex items-center justify-between px-2.5 py-2 sm:py-1.5 text-xs rounded-lg transition-colors cursor-pointer text-left min-h-[36px] sm:min-h-0",
                         isSelected
                           ? "bg-[#fdf2f8] text-[#a80063] font-semibold"
                           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
@@ -158,14 +158,14 @@ export default function PublicBanner({
         )}
 
         {/* Dokumen Terdaftar Pill */}
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#fdf2f8] border border-[#fbcfe8] text-[11px] font-semibold text-[#a80063]">
+        <div className="inline-flex items-center gap-1.5 h-8.5 sm:h-8 px-2.5 rounded-lg bg-[#fdf2f8] border border-[#fbcfe8] text-[11px] font-semibold text-[#a80063] shrink-0">
           <Layers size={13} className="text-[#a80063]" />
-          <span>{totalDocs} Dokumen Terdaftar</span>
+          <span>{totalDocs} Terdaftar</span>
         </div>
 
         {/* Kesiapan Pill */}
         {stats && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700">
+          <div className="inline-flex items-center gap-1.5 h-8.5 sm:h-8 px-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700 shrink-0">
             <CheckCircle2 size={13} className="text-emerald-600" />
             <span>{stats.persentaseLengkap}% Siap</span>
           </div>

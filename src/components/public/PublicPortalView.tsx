@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Search,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +20,7 @@ import {
   buildSubKategoriTree,
   SubKategoriTreeNode,
 } from "@/lib/hierarchy";
+import { isDriveFolder } from "@/lib/drive";
 
 interface DokumenItem {
   id: string;
@@ -216,14 +218,14 @@ export default function PublicPortalView({
     }
   }
 
-  // Komponen untuk merender sekumpulan kartu dokumen dalam grid 5 kolom
+  // Komponen untuk merender sekumpulan kartu dokumen dalam grid 2 kolom di mobile, 5 kolom di desktop
   function renderDocumentCards(docs: DokumenItem[]) {
     return (
       <div
         className={`grid gap-2 sm:gap-2.5 transition-all duration-300 ${
           isSplitView
-            ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3"
-            : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+            ? "grid-cols-2 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3"
+            : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         }`}
       >
         {docs.map((doc, docIdx) => {
@@ -235,42 +237,42 @@ export default function PublicPortalView({
               key={doc.id}
               onClick={() => onSelectDocument(doc)}
               className={cn(
-                "group relative bg-white rounded-xl border p-2.5 sm:p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none",
+                "group relative bg-white rounded-xl border p-2 sm:p-2.5 md:p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none active:scale-[0.99]",
                 isCurrentActive
                   ? "border-[#a80063] ring-2 ring-[#a80063]/15 shadow-md bg-[#fdf2f8]/30"
                   : "border-slate-200/80 hover:border-[#a80063]/50 hover:shadow-md hover:translate-y-[-1px]"
               )}
             >
               {/* Header Card: Nomor & Status Badge */}
-              <div className="flex items-center justify-between gap-1 mb-2">
-                <span className="w-5 h-5 rounded-md bg-slate-100 group-hover:bg-[#fdf2f8] group-hover:text-[#a80063] text-slate-500 text-[10.5px] font-bold flex items-center justify-center transition-colors">
+              <div className="flex items-center justify-between gap-1 mb-1.5 sm:mb-2">
+                <span className="w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-md bg-slate-100 group-hover:bg-[#fdf2f8] group-hover:text-[#a80063] text-slate-500 text-[9.5px] sm:text-[10px] font-bold flex items-center justify-center transition-colors shrink-0">
                   {docIdx + 1}
                 </span>
 
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-semibold border",
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] sm:text-[9.5px] font-semibold border truncate shrink-0",
                     statusStyle.bg
                   )}
                 >
                   <span
-                    className={cn("w-1.5 h-1.5 rounded-full", statusStyle.dot)}
+                    className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusStyle.dot)}
                   />
-                  {statusStyle.label}
+                  <span>{statusStyle.label}</span>
                 </span>
               </div>
 
               {/* Title & Deskripsi */}
-              <div className="mb-2 min-w-0">
+              <div className="mb-2 min-w-0 flex-1">
                 <h4
-                  className="text-xs font-bold text-slate-800 group-hover:text-[#a80063] line-clamp-2 leading-snug transition-colors"
+                  className="text-[11px] sm:text-xs font-bold text-slate-800 group-hover:text-[#a80063] line-clamp-2 leading-snug transition-colors"
                   title={doc.nama}
                 >
                   {doc.nama}
                 </h4>
                 {doc.deskripsi && (
                   <p
-                    className="text-[10px] text-slate-400 line-clamp-1 mt-1 leading-normal"
+                    className="text-[9.5px] sm:text-[10px] text-slate-400 line-clamp-1 mt-0.5 sm:mt-1 leading-normal"
                     title={doc.deskripsi}
                   >
                     {doc.deskripsi}
@@ -278,15 +280,32 @@ export default function PublicPortalView({
                 )}
               </div>
 
-              {/* Footer Card: Ikon Berkas & Status Preview */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                <span className="flex items-center gap-1 font-medium text-slate-400 group-hover:text-[#a80063] transition-colors">
-                  <FileText size={12} />
-                  <span>Preview</span>
+              {/* Footer Card: Ikon Berkas & Status Preview + Direct Drive Link */}
+              <div className="pt-1.5 sm:pt-2 border-t border-slate-100 flex items-center justify-between text-[9.5px] sm:text-[10px] text-slate-400 mt-auto">
+                <span className="flex items-center gap-1 font-semibold text-[#a80063] sm:text-slate-400 sm:group-hover:text-[#a80063] transition-colors">
+                  {isDriveFolder(doc.linkDrive) ? (
+                    <>
+                      <FolderOpen size={11} className="shrink-0 text-[#a80063]" />
+                      <span className="text-[#a80063]">Folder</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText size={11} className="shrink-0" />
+                      <span>Preview</span>
+                    </>
+                  )}
                 </span>
-                <span className="text-[9.5px] font-medium text-slate-400 group-hover:text-slate-600">
-                  Google Drive
-                </span>
+                <a
+                  href={doc.linkDrive}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 font-medium text-slate-500 hover:text-[#a80063] p-0.5 -m-0.5 rounded hover:bg-slate-50 transition-colors"
+                  title={isDriveFolder(doc.linkDrive) ? "Buka folder di Google Drive" : "Buka langsung di Google Drive"}
+                >
+                  <ExternalLink size={10} className="shrink-0" />
+                  <span>Drive</span>
+                </a>
               </div>
             </div>
           );

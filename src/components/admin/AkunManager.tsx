@@ -502,9 +502,144 @@ export default function AkunManager({
         </div>
       </div>
 
-      {/* ── 3. STANDARDIZED DATA TABLE (CDU Portal Monitoring Standard) ──── */}
+      {/* ── 3. DATA LIST: MOBILE CARDS (< md) & DESKTOP TABLE (>= md) ──── */}
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* MOBILE USER CARDS (< md) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {paginatedUsers.length === 0 ? (
+            <div className="py-10 px-4 text-center text-slate-400">
+              <Users size={24} className="mx-auto mb-2 text-slate-300" />
+              <p className="text-xs font-semibold text-slate-700">
+                Tidak ada akun yang sesuai dengan filter
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Coba sesuaikan kata kunci atau reset filter
+              </p>
+            </div>
+          ) : (
+            paginatedUsers.map((user, idx) => {
+              const isSuper = user.role === Role.SUPER_ADMIN;
+              const isCurrent = user.id === currentUserId;
+              const rowNumber = (currentPage - 1) * pageSize + idx + 1;
+              const initials = user.name
+                .split(" ")
+                .map((n) => n[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase();
+
+              return (
+                <div key={user.id} className="p-3.5 space-y-2.5 bg-white">
+                  {/* Top Row: User Avatar, Name, Email & Role */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-[#a80063]/10 text-[#a80063] font-bold text-xs flex items-center justify-center shrink-0">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-bold text-xs text-slate-900 truncate">
+                            {user.name}
+                          </h4>
+                          {isCurrent && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 shrink-0">
+                              Anda
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      {isSuper ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#fdf2f8] text-[#a80063] border border-[#fbcfe8]">
+                          <ShieldCheck size={11} />
+                          <span>Super Admin</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          <Shield size={11} />
+                          <span>Admin</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom Row: Category Assignment & Action Buttons */}
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                    <div className="min-w-0 truncate pr-2">
+                      {isSuper ? (
+                        <span className="text-[10.5px] text-slate-400 font-medium">
+                          Seluruh Kategori
+                        </span>
+                      ) : user.kategori ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border truncate max-w-[160px]"
+                          style={{
+                            backgroundColor: `${user.kategori.warna || "#a80063"}15`,
+                            color: user.kategori.warna || "#a80063",
+                            borderColor: `${user.kategori.warna || "#a80063"}30`,
+                          }}
+                        >
+                          <Layers size={10} />
+                          <span className="truncate">{user.kategori.nama}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10.5px] text-slate-400 italic">
+                          Belum ditentukan
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Actions with touch targets */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPasswordModal({ isOpen: true, user })}
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 active:text-amber-600 active:bg-amber-50 border border-slate-200/70 cursor-pointer"
+                        title="Ubah Password"
+                      >
+                        <KeyRound size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(user)}
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 active:text-slate-800 active:bg-slate-100 border border-slate-200/70 cursor-pointer"
+                        title="Edit Akun"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+
+                      {!isCurrent && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeleteConfirm({
+                              isOpen: true,
+                              id: user.id,
+                              nama: user.name,
+                            })
+                          }
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 active:text-rose-600 active:bg-rose-50 border border-slate-200/70 cursor-pointer"
+                          title="Hapus Akun"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* DESKTOP TABLE (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50/90 border-b border-slate-200/70 text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none">
               <tr>
@@ -738,11 +873,14 @@ export default function AkunManager({
 
       {/* ── 5. MODAL TAMBAH / EDIT AKUN (Wider max-w-2xl ala DokumenManager) ── */}
       {userModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 transition-opacity overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 relative my-8 animate-modal-pop">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl max-w-2xl w-full p-4 sm:p-7 shadow-2xl border border-slate-200 relative max-h-[92vh] sm:max-h-[90vh] overflow-y-auto animate-modal-pop">
+            {/* Mobile Drag Indicator */}
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
             <button
               onClick={() => setUserModal({ isOpen: false, mode: "create" })}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 sm:p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -881,11 +1019,14 @@ export default function AkunManager({
 
       {/* ── 6. MODAL UBAH PASSWORD ─────────────────────────────────────── */}
       {passwordModal.isOpen && passwordModal.user && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 transition-opacity overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative my-8 animate-modal-pop">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-200 relative max-h-[92vh] sm:max-h-[90vh] overflow-y-auto animate-modal-pop">
+            {/* Mobile Drag Indicator */}
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
             <button
               onClick={() => setPasswordModal({ isOpen: false })}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 sm:p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>

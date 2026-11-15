@@ -76,6 +76,7 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -91,6 +92,11 @@ body {
   font-size: 13px;
   line-height: 1.45;
   letter-spacing: -0.01em;
+}
+
+/* Mobile Touch Optimization */
+button, a, input, select, textarea {
+  touch-action: manipulation;
 }
 
 /* ─── Custom Sleek Scrollbar ───────────────────────────────────────────────── */

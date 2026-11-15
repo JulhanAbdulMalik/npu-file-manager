@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
@@ -11,7 +11,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Dashboard | NPU File Manager", template: "%s | NPU File Manager" },
+  title: { default: "Portal Dokumen | NPU File Manager", template: "%s | NPU File Manager" },
   description: "Sistem Manajemen Dokumen & File Manager Nusa Putra University",
   icons: {
     icon: [
@@ -21,6 +21,13 @@ export const metadata: Metadata = {
     shortcut: "/icon.svg",
     apple: "/icon.svg",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#a80063",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Layers,
   Plus,
@@ -13,6 +13,8 @@ import {
   X,
   Check,
   ChevronRight,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   createKategori,
@@ -21,6 +23,9 @@ import {
   createSubKategori,
   updateSubKategori,
   deleteSubKategori,
+  getKategoris,
+  swapKategoriOrder,
+  swapSubKategoriOrder,
 } from "@/actions/kategori";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -100,8 +105,72 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
 
   const [loading, setLoading] = useState(false);
 
+  // Sync state if initial props change
+  useEffect(() => {
+    setKategoris(initialKategoris);
+  }, [initialKategoris]);
+
   function toggleExpand(id: string) {
     setExpandedKats((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  // ── REORDERING HANDLERS ─────────────────────────────────────────────
+  async function handleMoveKategori(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= kategoris.length) return;
+
+    const katCurrent = kategoris[index];
+    const katTarget = kategoris[targetIndex];
+
+    // Optimistic swap in local array
+    const updated = [...kategoris];
+    updated[index] = katTarget;
+    updated[targetIndex] = katCurrent;
+    setKategoris(updated);
+
+    try {
+      const res = await swapKategoriOrder(katCurrent.id, katTarget.id);
+      if (res.success) {
+        toast.success("Urutan kategori berhasil dipindahkan");
+        const ref = await getKategoris();
+        if (ref.success && ref.data) setKategoris(ref.data as any);
+        router.refresh();
+      } else {
+        toast.error(res.error || "Gagal memindahkan urutan kategori");
+        const ref = await getKategoris();
+        if (ref.success && ref.data) setKategoris(ref.data as any);
+      }
+    } catch {
+      toast.error("Terjadi kesalahan sistem saat memindahkan urutan kategori");
+      const ref = await getKategoris();
+      if (ref.success && ref.data) setKategoris(ref.data as any);
+    }
+  }
+
+  async function handleMoveSubKategori(
+    siblings: SubKategoriTreeNode[],
+    index: number,
+    direction: -1 | 1
+  ) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= siblings.length) return;
+
+    const subCurrent = siblings[index];
+    const subTarget = siblings[targetIndex];
+
+    try {
+      const res = await swapSubKategoriOrder(subCurrent.id, subTarget.id);
+      if (res.success) {
+        toast.success("Urutan sub-kategori berhasil dipindahkan");
+        const ref = await getKategoris();
+        if (ref.success && ref.data) setKategoris(ref.data as any);
+        router.refresh();
+      } else {
+        toast.error(res.error || "Gagal memindahkan urutan sub-kategori");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan sistem saat memindahkan urutan sub-kategori");
+    }
   }
 
   // ── KATEGORI HANDLERS ───────────────────────────────────────────────
@@ -129,6 +198,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         if (res.success && res.data) {
           toast.success("Kategori berhasil dibuat!");
           setKategoriModal({ isOpen: false, mode: "create" });
+          const ref = await getKategoris();
+          if (ref.success && ref.data) setKategoris(ref.data as any);
           router.refresh();
         } else {
           toast.error(res.error || "Gagal membuat kategori");
@@ -142,6 +213,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         if (res.success) {
           toast.success("Kategori berhasil diperbarui!");
           setKategoriModal({ isOpen: false, mode: "create" });
+          const ref = await getKategoris();
+          if (ref.success && ref.data) setKategoris(ref.data as any);
           router.refresh();
         } else {
           toast.error(res.error || "Gagal memperbarui kategori");
@@ -180,6 +253,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         if (res.success) {
           toast.success("Sub-kategori berhasil ditambahkan!");
           setSubModal({ isOpen: false, mode: "create" });
+          const ref = await getKategoris();
+          if (ref.success && ref.data) setKategoris(ref.data as any);
           router.refresh();
         } else {
           toast.error(res.error || "Gagal menambahkan sub-kategori");
@@ -193,6 +268,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         if (res.success) {
           toast.success("Sub-kategori berhasil diperbarui!");
           setSubModal({ isOpen: false, mode: "create" });
+          const ref = await getKategoris();
+          if (ref.success && ref.data) setKategoris(ref.data as any);
           router.refresh();
         } else {
           toast.error(res.error || "Gagal memperbarui sub-kategori");
@@ -213,6 +290,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         const res = await deleteKategori(deleteConfirm.id);
         if (res.success) {
           toast.success("Kategori berhasil dihapus");
+          setKategoris((prev) => prev.filter((k) => k.id !== deleteConfirm.id));
           setDeleteConfirm({ isOpen: false, type: "kategori", id: "", nama: "" });
           router.refresh();
         } else {
@@ -223,6 +301,8 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
         if (res.success) {
           toast.success("Sub-kategori berhasil dihapus");
           setDeleteConfirm({ isOpen: false, type: "sub", id: "", nama: "" });
+          const ref = await getKategoris();
+          if (ref.success && ref.data) setKategoris(ref.data as any);
           router.refresh();
         } else {
           toast.error(res.error || "Gagal menghapus sub-kategori");
@@ -253,7 +333,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
     kat: Kategori,
     katColor: string
   ): React.ReactNode {
-    return nodes.map((node) => {
+    return nodes.map((node, nodeIdx) => {
       const indentClass =
         node.level === 1
           ? ""
@@ -297,6 +377,29 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
             {/* Aksi */}
             <td className="py-2.5 pl-2 pr-1 text-right">
               <div className="flex items-center justify-end gap-1">
+                {/* Pindahkan Urutan Sub-Kategori (Up / Down) */}
+                <div className="flex items-center border border-slate-200/80 rounded bg-white overflow-hidden shadow-2xs mr-1">
+                  <button
+                    type="button"
+                    disabled={nodeIdx === 0}
+                    onClick={() => handleMoveSubKategori(nodes, nodeIdx, -1)}
+                    className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Pindahkan ke Atas"
+                  >
+                    <ArrowUp size={11} />
+                  </button>
+                  <div className="w-px h-3 bg-slate-200" />
+                  <button
+                    type="button"
+                    disabled={nodeIdx === nodes.length - 1}
+                    onClick={() => handleMoveSubKategori(nodes, nodeIdx, 1)}
+                    className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Pindahkan ke Bawah"
+                  >
+                    <ArrowDown size={11} />
+                  </button>
+                </div>
+
                 {/* Tambah Anak Sub-Kategori */}
                 <button
                   type="button"
@@ -309,10 +412,10 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                       parentName: node.fullLabel,
                     })
                   }
-                  className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[10.5px] font-semibold text-[#a80063] bg-[#fdf2f8] hover:bg-[#fce7f3] border border-[#fbcfe8] transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10.5px] font-semibold text-[#a80063] bg-[#fdf2f8] hover:bg-[#fce7f3] border border-[#fbcfe8] transition-colors cursor-pointer min-h-[30px]"
                   title={`Tambah Anak Sub di bawah "${node.cleanName}"`}
                 >
-                  <FolderPlus size={11} />
+                  <FolderPlus size={12} />
                   <span className="hidden sm:inline">+ Anak</span>
                 </button>
 
@@ -328,10 +431,10 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                       data: node,
                     })
                   }
-                  className="w-6 h-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+                  className="w-7 h-7 sm:w-6 sm:h-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
                   title="Edit Sub-Kategori"
                 >
-                  <Edit2 size={11} />
+                  <Edit2 size={12} />
                 </button>
 
                 {/* Hapus */}
@@ -345,10 +448,10 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                       nama: `${node.code} ${node.cleanName}`,
                     })
                   }
-                  className="w-6 h-6 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                  className="w-7 h-7 sm:w-6 sm:h-6 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
                   title="Hapus Sub-Kategori"
                 >
-                  <Trash2 size={11} />
+                  <Trash2 size={12} />
                 </button>
               </div>
             </td>
@@ -364,7 +467,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-4 w-full">
       {/* ── HEADER CARD ──────────────────────────────────────────────────── */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -372,7 +475,7 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
             <span>Kelola Kategori &amp; Sub-Kategori</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Atur hierarki penomoran (1., 1.1., 1.1.1.), struktur kategori, sub-kategori bertingkat, dan dokumen{" "}
+            Atur hierarki penomoran (1., 1.1., 1.1.1.), struktur kategori, sub-kategori bertingkat, dan urutan tampilan{" "}
             <span className="font-semibold text-[#a80063]">Universitas Nusa Putra</span>
           </p>
         </div>
@@ -495,6 +598,35 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
                     {kat.subKategori.length} Sub &bull; {totalDocs} Dokumen
                   </span>
 
+                  {/* Urutkan Kategori (Move Up / Down) */}
+                  <div className="flex items-center border border-slate-200/80 rounded-lg overflow-hidden bg-white shadow-2xs mr-1">
+                    <button
+                      type="button"
+                      disabled={katIdx === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveKategori(katIdx, -1);
+                      }}
+                      className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      title="Pindahkan Kategori ke Atas"
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    <div className="w-px h-4 bg-slate-200" />
+                    <button
+                      type="button"
+                      disabled={katIdx === kategoris.length - 1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveKategori(katIdx, 1);
+                      }}
+                      className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      title="Pindahkan Kategori ke Bawah"
+                    >
+                      <ArrowDown size={12} />
+                    </button>
+                  </div>
+
                   {/* Tambah Sub-Kategori Tingkat Utama */}
                   <button
                     onClick={() =>
@@ -599,13 +731,16 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
 
       {/* ── MODAL KATEGORI (CREATE / EDIT) ──────────────────────────────── */}
       {kategoriModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 transition-opacity">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative animate-modal-pop">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-200 relative max-h-[92vh] sm:max-h-[90vh] overflow-y-auto animate-modal-pop">
+            {/* Mobile Drag Indicator */}
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
             <button
               onClick={() =>
                 setKategoriModal({ isOpen: false, mode: "create" })
               }
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 sm:p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -703,11 +838,14 @@ export default function KategoriManager({ initialKategoris }: KategoriManagerPro
 
       {/* ── MODAL SUB-KATEGORI (CREATE / EDIT DENGAN DUKUNGAN ANAK SUB) ─── */}
       {subModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 transition-opacity">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative animate-modal-pop">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-200 relative max-h-[92vh] sm:max-h-[90vh] overflow-y-auto animate-modal-pop">
+            {/* Mobile Drag Indicator */}
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
             <button
               onClick={() => setSubModal({ isOpen: false, mode: "create" })}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 sm:p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>

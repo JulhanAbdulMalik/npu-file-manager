@@ -287,9 +287,98 @@ export async function reorderKategori(items: { id: string; urutan: number }[]) {
     revalidatePath("/kategori");
     revalidatePath("/dokumen");
     revalidatePath("/");
+    revalidatePath("/dashboard");
     return { success: true };
   } catch (error: any) {
     console.error("Error in reorderKategori:", error);
     return { success: false, error: error.message || "Gagal mengubah urutan kategori" };
+  }
+}
+
+export async function swapKategoriOrder(id1: string, id2: string) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return { success: false, error: "Akses ditolak: Silakan masuk terlebih dahulu" };
+    }
+
+    const [kat1, kat2] = await Promise.all([
+      prisma.kategori.findUnique({ where: { id: id1 }, select: { id: true, urutan: true } }),
+      prisma.kategori.findUnique({ where: { id: id2 }, select: { id: true, urutan: true } }),
+    ]);
+
+    if (!kat1 || !kat2) {
+      return { success: false, error: "Kategori tidak ditemukan" };
+    }
+
+    let u1 = kat1.urutan;
+    let u2 = kat2.urutan;
+    if (u1 === u2) {
+      u2 = u1 + 1;
+    }
+
+    await prisma.$transaction([
+      prisma.kategori.update({
+        where: { id: id1 },
+        data: { urutan: u2 },
+      }),
+      prisma.kategori.update({
+        where: { id: id2 },
+        data: { urutan: u1 },
+      }),
+    ]);
+
+    revalidatePath("/kategori");
+    revalidatePath("/dokumen");
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in swapKategoriOrder:", error);
+    return { success: false, error: error.message || "Gagal mengubah urutan kategori" };
+  }
+}
+
+export async function swapSubKategoriOrder(id1: string, id2: string) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return { success: false, error: "Akses ditolak: Silakan masuk terlebih dahulu" };
+    }
+
+    const [sub1, sub2] = await Promise.all([
+      prisma.subKategori.findUnique({ where: { id: id1 }, select: { id: true, urutan: true } }),
+      prisma.subKategori.findUnique({ where: { id: id2 }, select: { id: true, urutan: true } }),
+    ]);
+
+    if (!sub1 || !sub2) {
+      return { success: false, error: "Sub-kategori tidak ditemukan" };
+    }
+
+    let u1 = sub1.urutan;
+    let u2 = sub2.urutan;
+    if (u1 === u2) {
+      u2 = u1 + 1;
+    }
+
+    await prisma.$transaction([
+      prisma.subKategori.update({
+        where: { id: id1 },
+        data: { urutan: u2 },
+      }),
+      prisma.subKategori.update({
+        where: { id: id2 },
+        data: { urutan: u1 },
+      }),
+    ]);
+
+    revalidatePath("/kategori");
+    revalidatePath("/dokumen");
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in swapSubKategoriOrder:", error);
+    return { success: false, error: error.message || "Gagal mengubah urutan sub-kategori" };
   }
 }
