@@ -219,7 +219,11 @@ export default function PublicPortalView({
   }
 
   // Komponen untuk merender sekumpulan kartu dokumen dalam grid 2 kolom di mobile, 5 kolom di desktop
-  function renderDocumentCards(docs: DokumenItem[]) {
+  function renderDocumentCards(
+    docs: DokumenItem[],
+    subNode?: SubKategoriTreeNode,
+    kat?: { cleanName?: string; nama: string; warna?: string | null }
+  ) {
     return (
       <div
         className={`grid gap-2 sm:gap-2.5 transition-all duration-300 ${
@@ -235,7 +239,26 @@ export default function PublicPortalView({
           return (
             <div
               key={doc.id}
-              onClick={() => onSelectDocument(doc)}
+              onClick={() =>
+                onSelectDocument({
+                  ...doc,
+                  subKategori: subNode
+                    ? {
+                        nama: subNode.cleanName || subNode.nama,
+                        kategori: {
+                          nama: kat?.cleanName || kat?.nama || "",
+                          warna: kat?.warna,
+                        },
+                      }
+                    : undefined,
+                  kategori: kat
+                    ? {
+                        nama: kat.cleanName || kat.nama,
+                        warna: kat.warna,
+                      }
+                    : undefined,
+                })
+              }
               className={cn(
                 "group relative bg-white rounded-xl border p-2 sm:p-2.5 md:p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none active:scale-[0.99]",
                 isCurrentActive
@@ -315,7 +338,10 @@ export default function PublicPortalView({
   }
 
   // Render rekursif SubKategori Nodes
-  function renderSubCategoryNode(node: SubKategoriTreeNode) {
+  function renderSubCategoryNode(
+    node: SubKategoriTreeNode,
+    kat?: { cleanName?: string; nama: string; warna?: string | null }
+  ) {
     const hasDocs = node.dokumen && node.dokumen.length > 0;
     const hasChildren = node.children && node.children.length > 0;
 
@@ -342,12 +368,12 @@ export default function PublicPortalView({
         </div>
 
         {/* Grid Document Cards */}
-        {hasDocs && renderDocumentCards(node.dokumen)}
+        {hasDocs && renderDocumentCards(node.dokumen, node, kat)}
 
         {/* Nested Children (Anak & Anak Lagi dari Sub Kategori) */}
         {hasChildren && (
           <div className="mt-3 pl-3 sm:pl-4 border-l-2 border-slate-200/80 space-y-4">
-            {node.children.map((childNode) => renderSubCategoryNode(childNode))}
+            {node.children.map((childNode) => renderSubCategoryNode(childNode, kat))}
           </div>
         )}
       </div>
@@ -492,13 +518,13 @@ export default function PublicPortalView({
                             {kategori.directDocs.length} Dokumen
                           </span>
                         </div>
-                        {renderDocumentCards(kategori.directDocs)}
+                        {renderDocumentCards(kategori.directDocs, undefined, kategori)}
                       </div>
                     )}
 
                     {/* 2. Bagian Sub-Kategori & Anak-Anaknya */}
                     {kategori.filteredSubTree.map((subNode) =>
-                      renderSubCategoryNode(subNode)
+                      renderSubCategoryNode(subNode, kategori)
                     )}
                   </div>
                 </div>

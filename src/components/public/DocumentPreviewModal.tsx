@@ -13,8 +13,6 @@ import {
   LayoutGrid,
   List,
   ArrowLeft,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -49,14 +47,14 @@ export default function DocumentPreviewModal({
   onClose,
 }: DocumentPreviewModalProps) {
   const [copied, setCopied] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState<number>(80); // Default 80% zoom
+  const [isIframeLoading, setIsIframeLoading] = useState(true);
   const [folderView, setFolderView] = useState<"grid" | "list">("grid");
   const [activeSubFile, setActiveSubFile] = useState<{ id: string; name: string; linkDrive: string } | null>(null);
 
-  // Reset active subfile & zoom when document changes
+  // Reset active subfile & loading when document changes
   useEffect(() => {
     setActiveSubFile(null);
-    setZoomLevel(80);
+    setIsIframeLoading(true);
   }, [dokumen?.id]);
 
   if (!dokumen) return null;
@@ -170,40 +168,8 @@ export default function DocumentPreviewModal({
               </div>
             </div>
 
-            {/* Action Controls: Zoom Controls & Close Button */}
+            {/* Action Controls: Close Button */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* Zoom Controls (Active when previewing an individual file) */}
-              {activeEmbedUrl && (
-                <div className="flex items-center gap-0.5 bg-white border border-slate-200/80 rounded-lg p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel((z) => Math.max(50, z - 10))}
-                    className="w-7 h-7 sm:w-6 sm:h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
-                    title="Zoom Out (Perkecil Dokumen)"
-                  >
-                    <ZoomOut size={12} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel(80)}
-                    className="text-[10px] font-semibold text-slate-600 px-1 hover:text-[#a80063] select-none min-w-[32px] text-center"
-                    title="Reset Zoom ke 80%"
-                  >
-                    {zoomLevel}%
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel((z) => Math.min(150, z + 10))}
-                    className="w-7 h-7 sm:w-6 sm:h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
-                    title="Zoom In (Perbesar Dokumen)"
-                  >
-                    <ZoomIn size={12} />
-                  </button>
-                </div>
-              )}
-
               <button
                 type="button"
                 onClick={onClose}
@@ -248,18 +214,26 @@ export default function DocumentPreviewModal({
               }
             />
           ) : activeEmbedUrl ? (
-            <iframe
-              src={activeEmbedUrl}
-              className="w-full h-full border-0 bg-white"
-              style={
-                zoomLevel !== 100
-                  ? { width: "100%", height: "100%", zoom: zoomLevel / 100 }
-                  : { width: "100%", height: "100%" }
-              }
-              title={`Pratinjau ${activeDisplayName}`}
-              allow="autoplay; fullscreen; clipboard-read; clipboard-write"
-              loading="lazy"
-            />
+            <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-100 select-none">
+              {/* Clean & Minimalist Loading State */}
+              {isIframeLoading && (
+                <div className="absolute inset-0 z-20 bg-slate-50/90 backdrop-blur-xs flex flex-col items-center justify-center gap-3 select-none pointer-events-none animate-fade-in">
+                  <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-[#a80063] animate-spin" />
+                  <p className="text-xs font-semibold text-slate-600 tracking-wide">
+                    Memuat dokumen...
+                  </p>
+                </div>
+              )}
+
+              <iframe
+                src={activeEmbedUrl}
+                className="w-full h-full border-0 bg-white block"
+                title={`Pratinjau ${activeDisplayName}`}
+                allow="autoplay; fullscreen; clipboard-read; clipboard-write"
+                loading="lazy"
+                onLoad={() => setIsIframeLoading(false)}
+              />
+            </div>
           ) : (
             <div className="p-8 text-center max-w-md m-auto">
               <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto mb-3">

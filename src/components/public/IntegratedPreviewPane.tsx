@@ -12,9 +12,6 @@ import {
   AlertCircle,
   FileText,
   Share2,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
   FolderOpen,
   LayoutGrid,
   List,
@@ -59,13 +56,14 @@ export default function IntegratedPreviewPane({
 }: IntegratedPreviewPaneProps) {
   const [copied, setCopied] = useState(false);
   const [iframeError, setIframeError] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState<number>(80); // Default 80% zoom agar tampilan dokumen luas & pas
+  const [isIframeLoading, setIsIframeLoading] = useState(true);
   const [folderView, setFolderView] = useState<"grid" | "list">("grid");
   const [activeSubFile, setActiveSubFile] = useState<{ id: string; name: string; linkDrive: string } | null>(null);
 
-  // Reset iframe error & active subfile when switching documents
+  // Reset iframe error, loading & active subfile when switching documents
   useEffect(() => {
     setIframeError(false);
+    setIsIframeLoading(true);
     setActiveSubFile(null);
   }, [dokumen?.id]);
 
@@ -186,40 +184,8 @@ export default function IntegratedPreviewPane({
             </div>
           </div>
 
-          {/* Action Controls: Zoom Controls & Close Button */}
+          {/* Action Controls: Close Button */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Zoom Controls (Active when previewing an individual file) */}
-            {activeEmbedUrl && (
-              <div className="flex items-center gap-0.5 bg-white border border-slate-200/80 rounded-lg p-0.5 shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setZoomLevel((z) => Math.max(50, z - 10))}
-                  className="w-7 h-7 sm:w-6 sm:h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
-                  title="Zoom Out (Perkecil Dokumen)"
-                >
-                  <ZoomOut size={12} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setZoomLevel(80)}
-                  className="text-[10px] font-semibold text-slate-600 px-1 hover:text-[#a80063] select-none min-w-[32px] text-center"
-                  title="Reset Zoom ke 80%"
-                >
-                  {zoomLevel}%
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setZoomLevel((z) => Math.min(150, z + 10))}
-                  className="w-7 h-7 sm:w-6 sm:h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
-                  title="Zoom In (Perbesar Dokumen)"
-                >
-                  <ZoomIn size={12} />
-                </button>
-              </div>
-            )}
-
             <button
               type="button"
               onClick={onClose}
@@ -269,26 +235,30 @@ export default function IntegratedPreviewPane({
             }
           />
         ) : activeEmbedUrl && !iframeError ? (
-          <iframe
-            src={activeEmbedUrl}
-            title={activeDisplayName}
-            tabIndex={0}
-            className="w-full h-full border-0 bg-white block flex-1 transition-all duration-150"
-            style={
-              zoomLevel !== 100
-                ? {
-                    width: "100%",
-                    height: "100%",
-                    zoom: zoomLevel / 100,
-                  }
-                : {
-                    width: "100%",
-                    height: "100%",
-                  }
-            }
-            allow="autoplay; fullscreen; clipboard-read; clipboard-write"
-            onError={() => setIframeError(true)}
-          />
+          <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-100 select-none">
+            {/* Clean & Minimalist Loading State */}
+            {isIframeLoading && (
+              <div className="absolute inset-0 z-20 bg-slate-50/90 backdrop-blur-xs flex flex-col items-center justify-center gap-3 select-none pointer-events-none animate-fade-in">
+                <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-[#a80063] animate-spin" />
+                <p className="text-xs font-semibold text-slate-600 tracking-wide">
+                  Memuat dokumen...
+                </p>
+              </div>
+            )}
+
+            <iframe
+              src={activeEmbedUrl}
+              title={activeDisplayName}
+              tabIndex={0}
+              className="w-full h-full border-0 bg-white block"
+              allow="autoplay; fullscreen; clipboard-read; clipboard-write"
+              onLoad={() => setIsIframeLoading(false)}
+              onError={() => {
+                setIframeError(true);
+                setIsIframeLoading(false);
+              }}
+            />
+          </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
             <div className="w-12 h-12 rounded-xl bg-[#fdf2f8] text-[#a80063] flex items-center justify-center mb-3">

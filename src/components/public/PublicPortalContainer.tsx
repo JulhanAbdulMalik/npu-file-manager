@@ -7,7 +7,7 @@ import PublicHeader from "./PublicHeader";
 import PublicSidebar from "./PublicSidebar";
 import PublicBanner from "./PublicBanner";
 import PublicPortalView from "./PublicPortalView";
-import IntegratedPreviewPane from "./IntegratedPreviewPane";
+import DocumentPreviewDrawer from "./DocumentPreviewDrawer";
 import { cn } from "@/lib/utils";
 import { stripLeadingNumber } from "@/lib/hierarchy";
 
@@ -49,10 +49,8 @@ export default function PublicPortalContainer({
     });
   }
 
-  // State for Integrated Right Preview Pane (Antigravity IDE 3-Pane Style)
+  // State for Document Preview Drawer (Identik Halaman /dokumen)
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isClosingPreview, setIsClosingPreview] = useState(false);
 
   // Active category name for the compact banner with numbering 1., 2.
   const activeCategoryName = useMemo(() => {
@@ -130,40 +128,14 @@ export default function PublicPortalContainer({
     }
   }
 
-  // Document selection handler dengan toggle halus & animasi keluar
+  // Document selection handler (identik dengan halaman /dokumen)
   function handleSelectDocument(doc: any) {
-    if (previewDoc?.id === doc.id && isPreviewOpen && !isClosingPreview) {
-      handleClosePreview();
-      return;
-    }
-    setIsClosingPreview(false);
     setPreviewDoc(doc);
-    setIsPreviewOpen(true);
   }
 
   function handleClosePreview() {
-    if (isClosingPreview) return;
-    setIsClosingPreview(true);
-    setTimeout(() => {
-      setIsPreviewOpen(false);
-      setIsClosingPreview(false);
-      setPreviewDoc(null);
-    }, 450); // Selaras dengan durasi animasi keluar tab preview (450ms)
+    setPreviewDoc(null);
   }
-
-  // Kunci scroll halaman latar belakang saat modal preview aktif di mobile (< lg)
-  useEffect(() => {
-    if (isPreviewOpen && !isClosingPreview) {
-      const origOverflow = document.body.style.overflow;
-      const origOverscroll = document.body.style.overscrollBehavior;
-      document.body.style.overflow = "hidden";
-      document.body.style.overscrollBehavior = "none";
-      return () => {
-        document.body.style.overflow = origOverflow;
-        document.body.style.overscrollBehavior = origOverscroll;
-      };
-    }
-  }, [isPreviewOpen, isClosingPreview]);
 
   function handleResetFilters() {
     setSelectedKategoriId("ALL");
@@ -216,17 +188,10 @@ export default function PublicPortalContainer({
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
-        {/* ── MULTI-PANE CONTENT AREA (ANTIGRAVITY IDE 3-PANE STYLE) ───────── */}
-        <div className="flex-1 p-3 sm:p-4 md:p-5 flex flex-col lg:flex-row items-start gap-4 lg:gap-5 w-full">
-          {/* TAB 2: CENTER DOCUMENT GRID (ALA CONTOH UPI - 5 KOLOM PER BARIS) */}
-          <main
-            className={cn(
-              "min-w-0 transition-all duration-450 ease-[cubic-bezier(0.16,1,0.3,1)]",
-              isPreviewOpen && !isClosingPreview
-                ? "flex-1 w-full lg:max-w-[calc(100%-48%-1.25rem)] xl:max-w-[calc(100%-50%-1.25rem)]"
-                : "w-full flex-1"
-            )}
-          >
+        {/* ── WORKSPACE CONTENT AREA (PORTAL PUBLIK) ────────────────────── */}
+        <div className="flex-1 p-3 sm:p-4 md:p-5 flex flex-col items-start gap-4 lg:gap-5 w-full">
+          {/* CENTER DOCUMENT GRID (5 KOLOM PER BARIS) */}
+          <main className="w-full flex-1 min-w-0">
             {/* Slim Greeting Banner ala CDU Portal dengan Dropdown Filter Status Sebaris & Tombol Toggle Buka/Tutup Kategori */}
             <PublicBanner
               activeCategoryName={activeCategoryName}
@@ -245,73 +210,22 @@ export default function PublicPortalContainer({
               selectedSubId={selectedSubId}
               selectedStatus={selectedStatus}
               searchQuery={searchQuery}
-              activeDocumentId={isPreviewOpen && !isClosingPreview ? previewDoc?.id : null}
-              isSplitView={isPreviewOpen && !isClosingPreview}
+              activeDocumentId={previewDoc?.id || null}
+              isSplitView={false}
               onSelectDocument={handleSelectDocument}
               onResetFilters={handleResetFilters}
               expandedKats={expandedKats}
               onToggleExpandKat={handleToggleExpandKat}
             />
           </main>
-
-          {/* TAB 3: RIGHT INTEGRATED PREVIEW PANE (DESKTOP SPLIT VIEW: >= lg) */}
-          <div
-            className={cn(
-              "hidden lg:block sticky top-16 lg:top-[72px] h-[calc(100vh-5.5rem)] shrink-0 transition-all duration-450 ease-[cubic-bezier(0.16,1,0.3,1)]",
-              isPreviewOpen && !isClosingPreview
-                ? "w-[48%] xl:w-[50%] opacity-100"
-                : "w-0 opacity-0 pointer-events-none overflow-hidden"
-            )}
-          >
-            {previewDoc && (
-              <div
-                className={cn(
-                  "w-full h-full transition-transform duration-450 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
-                  isPreviewOpen && !isClosingPreview
-                    ? "translate-x-0"
-                    : "translate-x-full"
-                )}
-              >
-                <IntegratedPreviewPane
-                  dokumen={previewDoc}
-                  onClose={handleClosePreview}
-                  isClosing={isClosingPreview}
-                />
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* ── MOBILE PREVIEW FULL-SCREEN / BOTTOM-SHEET MODAL (< lg) ──────── */}
-        {previewDoc && (
-          <div
-            className={cn(
-              "fixed inset-0 z-50 lg:hidden flex flex-col justify-end sm:justify-center bg-slate-900/60 backdrop-blur-xs overscroll-contain transition-opacity duration-300",
-              isPreviewOpen && !isClosingPreview
-                ? "opacity-100 pointer-events-auto"
-                : "opacity-0 pointer-events-none"
-            )}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) handleClosePreview();
-            }}
-          >
-            <div
-              className={cn(
-                "h-[92vh] sm:h-[88vh] w-full sm:max-w-xl sm:mx-auto bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden overscroll-contain transition-transform duration-350 ease-out will-change-transform",
-                isPreviewOpen && !isClosingPreview
-                  ? "translate-y-0 scale-100"
-                  : "translate-y-full sm:scale-95"
-              )}
-            >
-              <IntegratedPreviewPane
-                dokumen={previewDoc}
-                onClose={handleClosePreview}
-                isClosing={isClosingPreview}
-                isMobileModal={true}
-              />
-            </div>
-          </div>
-        )}
+        {/* Document Preview Drawer (Identik Halaman /dokumen - Half Screen & Expandable) */}
+        <DocumentPreviewDrawer
+          dokumen={previewDoc}
+          isOpen={!!previewDoc}
+          onClose={handleClosePreview}
+        />
 
         {/* ── FOOTER FULL WIDTH ────────────────────────────────────────── */}
         <footer className="mt-auto border-t border-slate-200/70 bg-white py-3.5 px-4 sm:px-6 text-xs text-slate-500 w-full">

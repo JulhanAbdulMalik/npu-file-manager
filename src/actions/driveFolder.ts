@@ -76,7 +76,14 @@ export async function getDriveFolderContents(folderId: string): Promise<DriveFol
       const name = nameMatch ? nameMatch[1].trim() : "Tanpa Nama";
 
       const thumbMatch = block.match(/<img src="([^"]+)"/);
-      const thumb = thumbMatch ? thumbMatch[1].replace(/&amp;/g, "&") : null;
+      let thumb = thumbMatch ? thumbMatch[1].replace(/&amp;/g, "&") : null;
+      if (thumb) {
+        // Tingkatkan resolusi thumbnail Google Drive menjadi 500px agar tajam dan jernih di layar High-DPI
+        thumb = thumb.replace(/=s\d+/, "=s500").replace(/=w\d+-h\d+/, "=w500-h500");
+      } else if (!isFolder) {
+        // Fallback resolusi tinggi resmi dari thumbnail Google Drive jika img tag belum tersedia
+        thumb = `https://drive.google.com/thumbnail?id=${entryId}&sz=w500`;
+      }
 
       const lastModMatch = block.match(/class="flip-entry-last-modified"><div>([^<]+)<\/div>/);
       const lastModified = lastModMatch ? lastModMatch[1].trim() : null;

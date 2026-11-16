@@ -14,8 +14,8 @@ import {
   LayoutGrid,
   List,
   ArrowLeft,
-  ZoomIn,
-  ZoomOut,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -41,6 +41,10 @@ interface DocumentPreviewDrawerProps {
         warna?: string | null;
       };
     };
+    kategori?: {
+      nama: string;
+      warna?: string | null;
+    };
   } | null;
   isOpen: boolean;
   onClose: () => void;
@@ -52,62 +56,124 @@ export default function DocumentPreviewDrawer({
   onClose,
 }: DocumentPreviewDrawerProps) {
   const [copied, setCopied] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState<number>(80); // Default 80% zoom
+  const [isExpanded, setIsExpanded] = useState(false); // Toggle setengah layar vs maksimal layar
   const [folderView, setFolderView] = useState<"grid" | "list">("grid");
   const [activeSubFile, setActiveSubFile] = useState<{ id: string; name: string; linkDrive: string } | null>(null);
+
+  // Smooth entrance & exit animation states
+  const [activeDoc, setActiveDoc] = useState(dokumen);
+  const [isMounted, setIsMounted] = useState(isOpen);
+  const [animateOpen, setAnimateOpen] = useState(false);
+  const [isFullyOpen, setIsFullyOpen] = useState(false);
+  const [isIframeLoading, setIsIframeLoading] = useState(true);
+
+  // Synchronize smooth transitions with isOpen & dokumen props
+  useEffect(() => {
+    if (isOpen && dokumen) {
+      setActiveDoc(dokumen);
+      setIsMounted(true);
+      const timer = setTimeout(() => {
+        setAnimateOpen(true);
+      }, 25);
+      const openTimer = setTimeout(() => {
+        setIsFullyOpen(true);
+      }, 380);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(openTimer);
+      };
+    } else {
+      setIsFullyOpen(false);
+      setAnimateOpen(false);
+      const timer = setTimeout(() => {
+        setIsMounted(false);
+        setActiveDoc(null);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, dokumen]);
+
+  // Smooth close action (triggers slide-out before unmounting)
+  function handleClose() {
+    setIsFullyOpen(false);
+    setAnimateOpen(false);
+    setTimeout(() => {
+      onClose();
+    }, 320);
+  }
 
   // Close on Escape key
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && isOpen) {
-        onClose();
+        handleClose();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
-  // Reset active subfile & zoom when drawer opens/closes or document changes
+  // Reset active subfile & expanded when drawer opens or document changes
   useEffect(() => {
     setActiveSubFile(null);
-    setZoomLevel(80);
+    setIsExpanded(false);
   }, [dokumen?.id, isOpen]);
 
   // Kunci scroll halaman latar belakang saat drawer pratinjau aktif
   useEffect(() => {
-    if (isOpen) {
+    if (isMounted) {
       const origOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = origOverflow;
       };
     }
-  }, [isOpen]);
+  }, [isMounted]);
 
-  if (!dokumen && !isOpen) return null;
-
-  const isFolder = isDriveFolder(dokumen?.linkDrive);
-  const fileId = dokumen?.driveFileId || extractDriveFileId(dokumen?.linkDrive);
+  const currentDoc = activeDoc || dokumen;
+  const isFolder = currentDoc ? isDriveFolder(currentDoc.linkDrive) : false;
+  const fileId = currentDoc
+    ? currentDoc.driveFileId || extractDriveFileId(currentDoc.linkDrive)
+    : null;
 
   // Active file being viewed (either direct document or subfile selected inside folder)
   const isViewingSubFile = isFolder && activeSubFile !== null;
   const activeFileId = isViewingSubFile ? activeSubFile.id : fileId;
-  const activeEmbedUrl = isViewingSubFile
-    ? getDriveEmbedUrl(activeSubFile.id, activeSubFile.linkDrive)
-    : fileId
-    ? getDriveEmbedUrl(fileId, dokumen?.linkDrive, folderView)
+  const activeEmbedUrl = currentDoc
+    ? isViewingSubFile
+      ? getDriveEmbedUrl(activeSubFile.id, activeSubFile.linkDrive)
+      : fileId
+      ? getDriveEmbedUrl(fileId, currentDoc.linkDrive, folderView)
+      : null
     : null;
-  const activeDownloadUrl = isViewingSubFile
-    ? getDriveDirectDownloadUrl(activeSubFile.id, activeSubFile.linkDrive)
-    : fileId
-    ? getDriveDirectDownloadUrl(fileId, dokumen?.linkDrive)
-    : dokumen?.linkDrive;
-  const activeLinkDrive = isViewingSubFile
-    ? activeSubFile.linkDrive
-    : dokumen?.linkDrive || "";
-  const activeDisplayName = isViewingSubFile
-    ? activeSubFile.name
-    : dokumen?.nama || "";
+  const activeDownloadUrl = currentDoc
+    ? isViewingSubFile
+      ? getDriveDirectDownloadUrl(activeSubFile.id, activeSubFile.linkDrive)
+      : fileId
+      ? getDriveDirectDownloadUrl(fileId, currentDoc.linkDrive)
+      : currentDoc.linkDrive
+    : "";
+  const activeLinkDrive = currentDoc
+    ? isViewingSubFile
+      ? activeSubFile.linkDrive
+      : currentDoc.linkDrive || ""
+    : "";
+  const activeDisplayName = currentDoc
+    ? isViewingSubFile
+      ? activeSubFile.name
+      : currentDoc.nama || ""
+    : "";
+
+  // Reset loading state when the active file/embed URL changes (Hook dipanggil tanpa conditional)
+  useEffect(() => {
+    if (activeEmbedUrl) {
+      setIsIframeLoading(true);
+    }
+  }, [activeEmbedUrl]);
+
+  // Early returns diletakkan SETELAH semua Hooks terpanggil (Rules of Hooks compliant)
+  if (!isMounted && !isOpen) return null;
+  if (!currentDoc) return null;
 
   function handleCopyLink() {
     if (!activeLinkDrive) return;
@@ -117,7 +183,7 @@ export default function DocumentPreviewDrawer({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const statusConfig = dokumen
+  const statusConfig = currentDoc
     ? {
         LENGKAP: {
           label: "Lengkap",
@@ -134,16 +200,16 @@ export default function DocumentPreviewDrawer({
           bg: "bg-slate-100 text-slate-600 border-slate-200",
           dot: "bg-slate-400",
         },
-      }[dokumen.status]
+      }[currentDoc.status]
     : null;
 
   return (
     <>
       {/* Backdrop Overlay with Smooth Fade */}
       <div
-        onClick={onClose}
-        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-40 transition-opacity duration-300 ease-out ${
-          isOpen
+        onClick={handleClose}
+        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-40 transition-opacity duration-300 ease-in-out ${
+          animateOpen
             ? "opacity-100 pointer-events-auto"
             : "opacity-0 pointer-events-none"
         }`}
@@ -152,8 +218,13 @@ export default function DocumentPreviewDrawer({
       {/* Right Slide-over Panel with Smooth Physics Easing */}
       <aside
         aria-label="Panel Pratinjau Dokumen"
-        className={`fixed top-0 right-0 h-full w-full sm:w-[500px] md:w-[560px] lg:w-[620px] xl:w-[680px] bg-white z-50 shadow-2xl border-l border-slate-200/90 flex flex-col transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] transform will-change-transform ${
-          isOpen ? "translate-x-0" : "translate-x-full"
+        style={isFullyOpen ? { transform: "none" } : undefined}
+        className={`fixed top-0 right-0 h-full w-full sm:w-[560px] md:w-[680px] ${
+          isExpanded
+            ? "lg:w-[85vw] xl:w-[85vw] 2xl:w-[85vw]"
+            : "lg:w-1/2 xl:w-1/2 2xl:w-1/2"
+        } bg-white z-50 shadow-2xl border-l border-slate-200/90 flex flex-col transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          animateOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {/* Top Accent Stripe */}
@@ -193,16 +264,16 @@ export default function DocumentPreviewDrawer({
 
               {/* Badges metadata row */}
               <div className="flex items-center gap-1.5 mt-0.5">
-                {dokumen?.subKategori?.kategori && (
+                {(dokumen?.subKategori?.kategori || dokumen?.kategori) && (
                   <span
                     className="px-1.5 py-0.2 rounded text-[9px] font-bold tracking-wide border truncate max-w-[150px]"
                     style={{
-                      backgroundColor: `${dokumen.subKategori.kategori.warna || "#a80063"}15`,
-                      color: dokumen.subKategori.kategori.warna || "#a80063",
-                      borderColor: `${dokumen.subKategori.kategori.warna || "#a80063"}30`,
+                      backgroundColor: `${(dokumen.subKategori?.kategori?.warna || dokumen.kategori?.warna) || "#a80063"}15`,
+                      color: (dokumen.subKategori?.kategori?.warna || dokumen.kategori?.warna) || "#a80063",
+                      borderColor: `${(dokumen.subKategori?.kategori?.warna || dokumen.kategori?.warna) || "#a80063"}30`,
                     }}
                   >
-                    {dokumen.subKategori.kategori.nama}
+                    {dokumen.subKategori?.kategori?.nama || dokumen.kategori?.nama}
                   </span>
                 )}
 
@@ -217,43 +288,21 @@ export default function DocumentPreviewDrawer({
               </div>
             </div>
 
-            {/* Action Controls: Zoom Controls & Close Button */}
+            {/* Action Controls: Maximize & Close Button */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* Zoom Controls (Active when previewing an individual file) */}
-              {activeEmbedUrl && (
-                <div className="flex items-center gap-0.5 bg-white border border-slate-200/80 rounded-lg p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel((z) => Math.max(50, z - 10))}
-                    className="w-7 h-7 sm:w-6 sm:h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
-                    title="Zoom Out (Perkecil Dokumen)"
-                  >
-                    <ZoomOut size={12} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel(80)}
-                    className="text-[10px] font-semibold text-slate-600 px-1 hover:text-[#a80063] select-none min-w-[32px] text-center"
-                    title="Reset Zoom ke 80%"
-                  >
-                    {zoomLevel}%
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel((z) => Math.min(150, z + 10))}
-                    className="w-7 h-7 sm:w-6 sm:h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#a80063] hover:bg-[#fdf2f8] transition-colors"
-                    title="Zoom In (Perbesar Dokumen)"
-                  >
-                    <ZoomIn size={12} />
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsExpanded((prev) => !prev)}
+                className="hidden lg:flex w-8 h-8 sm:w-7 sm:h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-slate-200/70 items-center justify-center transition-all cursor-pointer"
+                title={isExpanded ? "Kembalikan ke Ukuran Setengah Layar" : "Perlebar ke Maksimal (85% Layar)"}
+                aria-label={isExpanded ? "Ukuran Setengah Layar" : "Perlebar Layar"}
+              >
+                {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
 
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="w-8 h-8 sm:w-7 sm:h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-slate-200/70 flex items-center justify-center transition-all cursor-pointer"
                 title="Tutup Panel Pratinjau (Esc)"
               >
@@ -271,9 +320,11 @@ export default function DocumentPreviewDrawer({
           {isFolder && !isViewingSubFile ? (
             <DriveFolderExplorer
               initialFolderId={fileId!}
-              initialFolderName={dokumen?.nama}
+              initialFolderName={currentDoc.nama}
               onOpenFile={(subFile) => setActiveSubFile(subFile)}
-              onClose={onClose}
+              onClose={handleClose}
+              isExpanded={isExpanded}
+              onToggleExpand={() => setIsExpanded((prev) => !prev)}
               statusBadge={
                 statusConfig ? (
                   <span
@@ -285,33 +336,41 @@ export default function DocumentPreviewDrawer({
                 ) : null
               }
               kategoriBadge={
-                dokumen?.subKategori?.kategori ? (
+                (currentDoc.subKategori?.kategori || currentDoc.kategori) ? (
                   <span
                     className="px-2 py-0.5 rounded text-[9.5px] font-bold tracking-wide border transition-colors"
                     style={{
-                      backgroundColor: `${dokumen.subKategori.kategori.warna || "#a80063"}15`,
-                      color: dokumen.subKategori.kategori.warna || "#a80063",
-                      borderColor: `${dokumen.subKategori.kategori.warna || "#a80063"}30`,
+                      backgroundColor: `${(currentDoc.subKategori?.kategori?.warna || currentDoc.kategori?.warna) || "#a80063"}15`,
+                      color: (currentDoc.subKategori?.kategori?.warna || currentDoc.kategori?.warna) || "#a80063",
+                      borderColor: `${(currentDoc.subKategori?.kategori?.warna || currentDoc.kategori?.warna) || "#a80063"}30`,
                     }}
                   >
-                    {dokumen.subKategori.kategori.nama}
+                    {currentDoc.subKategori?.kategori?.nama || currentDoc.kategori?.nama}
                   </span>
                 ) : null
               }
             />
           ) : activeEmbedUrl ? (
-            <iframe
-              src={activeEmbedUrl}
-              className="w-full h-full border-0 bg-white"
-              style={
-                zoomLevel !== 100
-                  ? { width: "100%", height: "100%", zoom: zoomLevel / 100 }
-                  : { width: "100%", height: "100%" }
-              }
-              title={`Pratinjau ${activeDisplayName}`}
-              allow="autoplay; fullscreen; clipboard-read; clipboard-write"
-              loading="lazy"
-            />
+            <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-100 select-none">
+              {/* Clean & Minimalist Loading State */}
+              {isIframeLoading && (
+                <div className="absolute inset-0 z-20 bg-slate-50/90 backdrop-blur-xs flex flex-col items-center justify-center gap-3 select-none pointer-events-none animate-fade-in">
+                  <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-[#a80063] animate-spin" />
+                  <p className="text-xs font-semibold text-slate-600 tracking-wide">
+                    Memuat dokumen...
+                  </p>
+                </div>
+              )}
+
+              <iframe
+                src={activeEmbedUrl}
+                className="w-full h-full border-0 bg-white block"
+                title={`Pratinjau ${activeDisplayName}`}
+                allow="autoplay; fullscreen; clipboard-read; clipboard-write"
+                loading="lazy"
+                onLoad={() => setIsIframeLoading(false)}
+              />
+            </div>
           ) : dokumen ? (
             <div className="p-8 text-center max-w-sm m-auto">
               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto mb-3">

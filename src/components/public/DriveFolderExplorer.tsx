@@ -14,6 +14,8 @@ import {
   Eye,
   AlertCircle,
   X,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { getDriveFolderContents, DriveFolderItem } from "@/actions/driveFolder";
 import { cn } from "@/lib/utils";
@@ -26,6 +28,8 @@ interface DriveFolderExplorerProps {
   statusBadge?: React.ReactNode;
   kategoriBadge?: React.ReactNode;
   className?: string;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 export default function DriveFolderExplorer({
@@ -36,6 +40,8 @@ export default function DriveFolderExplorer({
   statusBadge,
   kategoriBadge,
   className,
+  isExpanded,
+  onToggleExpand,
 }: DriveFolderExplorerProps) {
   // Folder navigation history stack: [{ id, name }, ...]
   const [folderHistory, setFolderHistory] = useState<{ id: string; name: string }[]>([
@@ -46,6 +52,7 @@ export default function DriveFolderExplorer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [failedThumbnails, setFailedThumbnails] = useState<Record<string, boolean>>({});
 
   const currentFolder = folderHistory[folderHistory.length - 1];
 
@@ -208,6 +215,18 @@ export default function DriveFolderExplorer({
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           </button>
 
+          {onToggleExpand && (
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              className="hidden lg:flex w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-slate-200/80 items-center justify-center transition-all cursor-pointer"
+              title={isExpanded ? "Kembalikan ke Ukuran Setengah Layar" : "Perlebar ke Maksimal (85% Layar)"}
+              aria-label={isExpanded ? "Ukuran Setengah Layar" : "Perlebar Layar"}
+            >
+              {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          )}
+
           {onClose && (
             <button
               type="button"
@@ -225,8 +244,8 @@ export default function DriveFolderExplorer({
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-100/60">
         {loading ? (
           /* Loading Skeleton */
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-2.5">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
               <div
                 key={i}
                 className="bg-white rounded-xl border border-slate-200/80 p-3 flex flex-col items-center justify-center animate-pulse gap-2 h-28"
@@ -269,8 +288,8 @@ export default function DriveFolderExplorer({
             </p>
           </div>
         ) : viewMode === "grid" ? (
-          /* ── GRID VIEW (COMPACT & PROPORTIONAL) ────────────────────────── */
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-2.5">
+          /* ── GRID VIEW (COMPACT 5 COLUMNS) ────────────────────────────── */
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-2.5">
             {items.map((item) => {
               const isFolder = item.type === "folder";
 
@@ -303,14 +322,15 @@ export default function DriveFolderExplorer({
                           Folder
                         </span>
                       </div>
-                    ) : item.thumbnail ? (
+                    ) : item.thumbnail && !failedThumbnails[item.id] ? (
                       <img
                         src={item.thumbnail}
                         alt={item.name}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover object-top transition-transform group-hover:scale-105"
                         loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
+                        onError={() => {
+                          setFailedThumbnails((prev) => ({ ...prev, [item.id]: true }));
                         }}
                       />
                     ) : (
@@ -412,11 +432,11 @@ export default function DriveFolderExplorer({
                       >
                         {item.name}
                       </p>
-                      {item.lastModified && (
+                      {/* {item.lastModified && (
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           Diperbarui: {item.lastModified}
                         </p>
-                      )}
+                      )} */}
                     </div>
                   </div>
 
